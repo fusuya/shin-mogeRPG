@@ -1,0 +1,359 @@
+(in-package :casket2022aki)
+
+
+;;文字幅取得
+(defun moge-char-width (char)
+    (if (<= #x20 (char-code char) #x7e)
+        1
+	2))
+;;string全体の文字幅
+(defun string-width (string)
+  (apply #'+ (map 'list #'moge-char-width string)))
+;;最低n幅もったstring作成
+(defun minimum-column (n string)
+  (let ((pad (- n (string-width string))))
+    (if (> pad 0)
+	(concatenate 'string string (make-string pad :initial-element #\ ))
+        string)))
+
+(defun fuchidori-text (x y str hdc &key (textcolor (encode-rgb 0 0 0)) (fuchicolor (encode-rgb 255 255 255)))
+  (set-text-color hdc fuchicolor)
+  (text-out hdc str (+ x 2) y)
+  (text-out hdc str (- x 2) y)
+  (text-out hdc str x (+ y 2))
+  (text-out hdc str x (- y 2))
+  (set-text-color hdc textcolor)
+  (text-out hdc str x y))
+
+
+(defun render-bar (hdc left top bot hp-right decreased-hp-right &key (hp-color +green+)
+                                                                     (dec-hp-color +red+))
+  ;;残りHP
+  (select-object hdc (aref *brush* hp-color))
+  (rectangle hdc left top hp-right bot)
+  ;;減ったHP
+  (select-object hdc (aref *brush* dec-hp-color))
+  (rectangle hdc hp-right top decreased-hp-right bot))
+
+;;HPバー表示
+(defun render-hp-bar (e left bot max-w bar-h hdc)
+  (with-slots (hp maxhp) e
+    (let* ((hp (floor (* (/ hp maxhp) max-w)))
+           (top (- bot bar-h))
+           (hp-right (+ left hp))
+           (decreased-hp (- max-w hp))
+           (decreased-hp-right (+ hp-right decreased-hp)))
+       (render-bar hdc left top bot hp-right decreased-hp-right))))
+
+
+(defun trans-blt (x y x-src y-src w-src h-src w-dest h-dest hdc hmemdc)
+  (transparent-blt hdc x y hmemdc x-src y-src :width-source w-src
+       :height-source h-src
+       :width-dest w-dest :height-dest h-dest
+       :transparent-color (encode-rgb 0 255 0)))
+
+
+(defun render-monster (monster hdc hmemdc &key (w2 32) (h2 32))
+  (select-object hmemdc *monsters-img*)
+  (with-slots (kind drawx drawy walk-img) monster
+    (let ((w 32) (h 32))
+      (trans-blt drawx drawy (* walk-img w) kind w h w2 h2 hdc hmemdc))))
+
+
+(defun render-monsters (donjon hdc hmemdc)
+  (with-slots (monsters) donjon
+    (loop :for monster :in monsters
+          :do (render-monster monster hdc hmemdc))))
+
+
+;; y : up 64 down 96 left 32 right 0
+(defun render-player (hdc hmemdc)
+  (with-slots (posx posy dir drawx drawy walk-img) *p*
+    (select-object hmemdc *p-walk-img*)
+    (let ((adj 4)
+          (w 24) (h 32))
+      (trans-blt (+ drawx adj) drawy (* walk-img w) dir w h w h hdc hmemdc))))
+
+
+
+(defun render-obj-img (x y cell item hdc hmemdc)
+  (select-object hmemdc *objs-img*)
+  (let ((posx (* x *cell-size*))
+        (posy (* y *cell-size*)))
+    (trans-blt posx posy (* cell *cell-size*) 0 *cell-size* *cell-size* *cell-size* *cell-size* hdc hmemdc)
+    (when item
+      (trans-blt posx posy (* item *cell-size*) 0 *cell-size* *cell-size* *cell-size* *cell-size* hdc hmemdc))))
+
+
+(defun render-stage (donjon hdc hmemdc)
+  (with-slots (stage) donjon
+    (loop :for y :from 0 :below *h-cell-num*
+          :do (loop :for x :from 0 :below *w-cell-num*
+                    :do (with-slots (cell item) (aref stage y x)
+                          (render-obj-img x y cell item hdc hmemdc))))))
+
+(defun render-donjon (donjon hdc hmemdc)
+  (render-stage donjon hdc hmemdc))
+
+(defun render-test (hdc)
+  (with-slots (posx posy drawx drawy dir) *p*
+    (select-object hdc *font40*)
+    (set-text-color hdc (encode-rgb 255 0 0))
+    (text-out hdc (format nil "dir:~d" dir) *donjon-w* 0)
+    (text-out hdc (format nil "posx:~d" posx) *donjon-w* 70)
+    (text-out hdc (format nil "posy:~d" posy) *donjon-w* 140)
+    (text-out hdc (format nil "drawx:~d" drawx) *donjon-w* 210)
+    (text-out hdc (format nil "drawy:~d" drawy) *donjon-w* 280)))
+
+;;枠
+(defun render-waku (x y w h hdc hmemdc)
+  (select-object hmemdc *waku-img*)
+  (trans-blt x y 0 0 128 128 w h hdc hmemdc))
+
+;;枠黒塗りつぶし
+(defun render-waku-black (x y w h hdc hmemdc)
+  (select-object hmemdc *waku-black*)
+  (trans-blt x y 0 0 128 128 w h hdc hmemdc))
+
+;;アイテムをゲットした時のメッセージウィンドウ
+(defun render-item-get-window (hdc hmemdc)
+  (with-slots (weapon get-item) *p*
+    (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+      (select-object hdc font)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (render-waku-black 0 400 700 200 hdc hmemdc)
+      (text-out hdc (format nil "~Aを手に入れた" (weapon/name get-item)) 20 410)
+      (text-out hdc (format nil "得:~A 威力:~3d 増HP:~2D 増agi:~2d" (minimum-column 18 (weapon/name get-item)) (weapon/power get-item)  (weapon/inchp get-item) (weapon/incagi get-item)) 20 450)
+      (text-out hdc (format nil "現:~A 威力:~3d 増HP:~2D 増agi:~2d" (minimum-column 18 (weapon/name weapon)) (weapon/power weapon)  (weapon/inchp weapon) (weapon/incagi weapon)) 20 480)
+      (text-out hdc "装備しますか？" 20 550)
+      (with-slots (diffpower diffhp diffagi) get-item
+	(set-text-color hdc (cdr diffpower))
+	(text-out hdc (format nil "~A" (car diffpower)) 385 510)
+	(set-text-color hdc (cdr diffhp))
+	(text-out hdc (format nil "~A" (car diffhp)) 510 510)
+	(set-text-color  hdc (cdr diffagi))
+	(text-out hdc (format nil "~A" (car diffagi)) 635 510)
+	(delete-object font)))))
+
+;;アイテム装備するか選択肢
+(defun render-item-equip? (hdc hmemdc)
+  (with-slots (cursor explore-state) *p*
+    (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+      (select-object hdc font)
+      (render-waku-black 810 460 140 120 hdc hmemdc)
+      (loop :for i :from 0
+	    :for str :in '("はい" "いいえ")
+	    :for y :in '(480 520)
+	    :for x = 830
+	    :do
+	       (if (and (= i cursor) (eq explore-state :get-item))
+		   (progn
+		     (select-object hdc (aref *brush* +white+))
+		     (rectangle hdc x y (+ x 90) (+ y 30))
+		     (set-text-color hdc (encode-rgb 0 0 0))
+		     (text-out hdc (format nil "~a" str) x y))
+		   (progn
+		     (set-text-color hdc (encode-rgb 255 255 255))
+		     (text-out hdc (format nil "~a" str) x y))))
+      (delete-object font))))
+
+;;バトル時のプレーヤーのステータス表示
+(defun render-battle-player-status (hdc hmemdc)
+  (with-slots (hp maxhp) *p*
+    (let ((font (create-font "MSゴシック" :height 33)))
+      (render-waku 470 600 500 128 hdc hmemdc)
+      (select-object hdc font)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (text-out hdc "もげ" 490 620)
+      (text-out hdc (format nil "~3d /~3d" hp maxhp) 650 620)
+      (render-hp-bar *p* 750 645 200 15 hdc)
+      (text-out hdc "回復薬:Ａキー" 490 670)
+      ;;(fuchidori-text 490 640 "もげ" hdc :textcolor (encode-rgb 255 255 255) :fuchicolor (encode-rgb 255 255 0))
+      (delete-object font))))
+
+;;バトル時のプレイヤー待機画像描画
+(defun render-battle-wait-player (hdc hmemdc)
+  (with-slots (drawy drawx dir) *p*
+    (select-object hmemdc *p-walk-img*)
+    (let ((w 24) (h 32))
+      (trans-blt drawx drawy 0 dir w h (* w 2) (* h 2) hdc hmemdc))))
+
+;;暗黒アニメーション
+(defun render-ankoku-animation (walk-img drawy hdc hmemdc)
+  (select-object hmemdc *p-atk-img*)
+  (let ((w 48) (h 32))
+    (trans-blt 750 drawy (* walk-img w) 32 w h (* w 2) (* h 2) hdc hmemdc)))
+
+;;突撃のアニメーション
+(defun render-assalut-animation (walk-img drawy hdc hmemdc)
+  (select-object hmemdc *p-atk-img*)
+  (let ((w 48) (h 32))
+    (trans-blt 750 drawy (* walk-img w) 0 w h (* w 2) (* h 2) hdc hmemdc)))
+
+;;通常の攻撃アニメーション
+(defun render-normal-atk-animation (walk-img drawy hdc hmemdc)
+  (select-object hmemdc *p-atk-img*)
+  (let ((w 48) (h 32))
+    (trans-blt 750 drawy (* walk-img w) 0 w h (* w 2) (* h 2) hdc hmemdc)))
+
+
+;;ポーションのアニメ
+(defun render-potion-animation (walk-img drawy hdc hmemdc)
+  (select-object hmemdc *p-walk-img*)
+  (let ((w 24) (h 32))
+    (trans-blt 800 drawy (* walk-img w) *heal* w h 48 64 hdc hmemdc)))
+
+;;プレイヤーの攻撃アニメーション
+(defun render-battle-atk-player (selected-skill walk-img drawy hdc hmemdc)
+  (cond
+    ((= selected-skill +potion+)
+     (render-potion-animation walk-img drawy hdc hmemdc))
+    ((= selected-skill +assalut+)
+     (render-assalut-animation walk-img drawy hdc hmemdc))
+    ((= selected-skill +ankoku+)
+     (render-ankoku-animation walk-img drawy hdc hmemdc))
+    (t
+     (render-normal-atk-animation walk-img drawy hdc hmemdc))))
+
+;;敵のダメージ表示
+(defun render-damage (damage hdc)
+  (with-slots (drawx drawy num color) damage
+    (let ((font (create-font "MSゴシック" :height 28)))
+      (select-object hdc font)
+      ;;(fuchidori-text drawx drawy (format nil "~2a" num) hdc
+      ;;                :fuchicolor (encode-rgb 255 255 255)
+      ;;               :textcolor color)
+      (set-text-color hdc color)
+      (text-out hdc (format nil "~2a" num) drawx drawy)
+      (delete-object font))))
+
+;;斬られるアニメーション
+(defun render-enemy-slashed (hdc hmemdc)
+  (with-slots (walk-img selected-enemy) *p*
+    (with-slots (battle-monsters) (game/donjon *game*)
+      (select-object hmemdc *slash-img*)
+      (let* ((w 32) (h 32)
+             (target (nth selected-enemy battle-monsters))
+             (x (obj/drawx target)) (y (obj/drawy target)))
+        (trans-blt x y (* walk-img w) 0 w h (* w 2) (* h 2) hdc hmemdc)))))
+
+;;薙ぎ払いエフェクト
+(defun render-enemy-swinged (hdc hmemdc)
+  (with-slots (walk-img selected-enemy) *p*
+    (select-object hmemdc *slash-img*)
+    (let* ((w 32) (h 32))
+      (trans-blt 30 100 (* walk-img w) 0 w h (* w 12) (* h 12) hdc hmemdc))))
+
+;;暗黒のエフェクト
+(defun render-enemy-ankoku (hdc hmemdc)
+  (with-slots (walk-img walk-num ankoku-img) *p*
+    (when (> walk-img 0)
+      (when (zerop (mod walk-num 5))
+        (incf ankoku-img)
+        (when (>= ankoku-img 4)
+          (setf ankoku-img 0)))
+      (select-object hmemdc *ankoku-img*)
+      (let ((w 32) (h 32) (x 920))
+        (loop :repeat 3
+              :for y :from 0
+              :do
+                 (let ((x2 (- (+ x (* y 40)) (+ (* walk-num 14) (* walk-img 60)))))
+                   (trans-blt x2 (+ 290 (* y 80)) (* ankoku-img 32) 0 w h (* w 2) (* h 2) hdc hmemdc)
+                   (trans-blt x2 (- 290 (* y 80)) (* ankoku-img 32) 0 w h (* w 2) (* h 2) hdc hmemdc)))))))
+
+;;敵が斬られるエフェクト
+(defun render-enemy-damage-effect (hdc hmemdc)
+  (with-slots (selected-skill) *p*
+    (cond
+      ((or (= selected-skill +slash+)
+           (= selected-skill +double-slash+))
+       (render-enemy-slashed hdc hmemdc))
+      ((= selected-skill +ankoku+)
+       (render-enemy-ankoku hdc hmemdc))
+      ((= selected-skill +swing+)
+       (render-enemy-swinged hdc hmemdc)))))
+
+;;バトル時のプレイヤー描画
+(defun render-battle-player (hdc hmemdc)
+  (with-slots (battle-state walk-img damage drawy selected-skill) *p*
+    (case battle-state
+      (:attack-animation
+       (render-battle-atk-player selected-skill walk-img drawy hdc hmemdc)
+       (render-enemy-damage-effect hdc hmemdc))
+      (t (render-battle-wait-player hdc hmemdc)))
+    (loop :for dmg :in damage
+          :do (render-damage dmg hdc))))
+
+
+;;バトルアクション選択画面描画
+(defun render-player-action (hdc hmemdc)
+  (with-slots (skill cursor battle-state) *p*
+    (let ((font (create-font "MSゴシック" :height 33))
+          (skill-pos '((15 610) (15 650) (15 690)
+                       (200 610) (200 650) (200 690))))
+      (render-waku 0 600 480 128 hdc hmemdc)
+      (select-object hdc font)
+      (loop :for skl :in skill
+            :for pos :in skill-pos
+            :for i :from 0
+            :do
+             (let ((x (car pos))
+                   (y (cadr pos))
+                   (name (skill/name skl)))
+               (if (and (= i cursor) (eq battle-state :action-select))
+                   (progn
+                     (select-object hdc (aref *brush* +white+))
+                     (rectangle hdc x y (+ x 180) (+ y 35))
+                     (set-text-color hdc (encode-rgb 0 0 0))
+                     (text-out hdc (format nil "~a" name) x y))
+                   (progn
+                    (set-text-color hdc (encode-rgb 255 255 255))
+                    (text-out hdc (format nil "~a" name) x y)))))
+      (delete-object font))))
+
+(defun render-monster-lv (x y lv hdc)
+  (select-object hdc *font20*)
+  (set-text-color hdc (encode-rgb 255 255 255))
+  (text-out hdc (format nil "Lv:~d" lv) x y))
+
+;;バトル時の敵画像描画
+(defun render-battle-monsters (donjon hdc hmemdc)
+  (with-slots (battle-monsters) donjon
+    (with-slots (cursor battle-state) *p*
+      (loop :for monster :in battle-monsters
+            :for i :from 0
+            :do (with-slots (drawx drawy lv damage hp) monster
+                  (let ((hpbar-x drawx) (hpbar-y (+ drawy 77))
+                        (lv-x (+ drawx 12)) (lv-y (- drawy 23)))
+                    (when (and (= i cursor) (eq battle-state :enemy-select))
+                      (select-object hdc (aref *brush* +white+))
+                      (rectangle hdc drawx drawy (+ drawx 64) (+ drawy 64)))
+                    (render-monster monster hdc hmemdc :w2 64 :h2 64)
+                    (render-hp-bar monster hpbar-x hpbar-y 64 8 hdc)
+                    (render-monster-lv lv-x lv-y lv hdc)
+                    (when damage
+                      (render-damage damage hdc))
+                    ))))))
+
+
+
+(defun render-battle (donjon hdc hmemdc)
+  (render-battle-player-status hdc hmemdc)
+  (render-player-action hdc hmemdc)
+  (render-battle-monsters donjon hdc hmemdc)
+  (render-battle-player hdc hmemdc))
+
+
+(defun render-game (hdc hmemdc)
+  (with-slots (state donjon) *game*
+    (case state
+      (:battle
+       (render-battle donjon hdc hmemdc))
+      (t
+       (render-donjon donjon hdc hmemdc)
+       (render-player hdc hmemdc)
+       (render-monsters donjon hdc hmemdc)
+       (when (eq :get-item (player/explore-state *p*))
+	 (render-item-get-window hdc hmemdc)
+	 (render-item-equip? hdc hmemdc))
+       (render-test hdc)))))
