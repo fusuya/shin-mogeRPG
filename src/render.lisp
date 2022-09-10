@@ -75,6 +75,10 @@
       (trans-blt (+ drawx adj) drawy (* walk-img w) dir w h w h hdc hmemdc))))
 
 
+;;bロック壊れた画像表示
+(defun render-break-block (x y hdc hmemdc)
+  (select-object hmemdc *break-block-img*)
+  (trans-blt (* x *cell-size*) (* y *cell-size*) 0 0 *cell-size* *cell-size* *cell-size* *cell-size* hdc hmemdc))
 
 (defun render-obj-img (x y cell item hdc hmemdc)
   (select-object hmemdc *objs-img*)
@@ -89,21 +93,27 @@
   (with-slots (stage) donjon
     (loop :for y :from 0 :below *h-cell-num*
           :do (loop :for x :from 0 :below *w-cell-num*
-                    :do (with-slots (cell item) (aref stage y x)
-                          (render-obj-img x y cell item hdc hmemdc))))))
+                    :do (with-slots (cell item breaked) (aref stage y x)
+                          (render-obj-img x y cell item hdc hmemdc)
+			  (when (> breaked 0)
+			    (render-break-block x y breaked hdc hmemdc)))))))
 
 (defun render-donjon (donjon hdc hmemdc)
   (render-stage donjon hdc hmemdc))
 
 (defun render-test (hdc)
-  (with-slots (posx posy drawx drawy dir) *p*
+  (with-slots (posx posy drawx drawy dir maxhp maxstr maxagi) *p*
     (select-object hdc *font40*)
     (set-text-color hdc (encode-rgb 255 0 0))
     (text-out hdc (format nil "dir:~d" dir) *donjon-w* 0)
-    (text-out hdc (format nil "posx:~d" posx) *donjon-w* 70)
-    (text-out hdc (format nil "posy:~d" posy) *donjon-w* 140)
-    (text-out hdc (format nil "drawx:~d" drawx) *donjon-w* 210)
-    (text-out hdc (format nil "drawy:~d" drawy) *donjon-w* 280)))
+    (text-out hdc (format nil "posx:~d" posx) *donjon-w* 40)
+    (text-out hdc (format nil "posy:~d" posy) *donjon-w* 80)
+    (text-out hdc (format nil "drawx:~d" drawx) *donjon-w* 120)
+    (text-out hdc (format nil "drawy:~d" drawy) *donjon-w* 160)
+    (text-out hdc (format nil "maxhp:~d" maxhp) *donjon-w* 200)
+    (text-out hdc (format nil "maxstr:~d" maxstr) *donjon-w* 240)
+    (text-out hdc (format nil "maxagi:~d" maxagi) *donjon-w* 280)))
+
 
 ;;枠
 (defun render-waku (x y w h hdc hmemdc)
@@ -121,18 +131,18 @@
     (let ((font (create-font "ＭＳ ゴシック" :height 28)))
       (select-object hdc font)
       (set-text-color hdc (encode-rgb 255 255 255))
-      (render-waku-black 0 400 700 200 hdc hmemdc)
+      (render-waku-black 0 400 730 200 hdc hmemdc)
       (text-out hdc (format nil "~Aを手に入れた" (weapon/name get-item)) 20 410)
-      (text-out hdc (format nil "得:~A 威力:~3d 増HP:~2D 増agi:~2d" (minimum-column 18 (weapon/name get-item)) (weapon/power get-item)  (weapon/inchp get-item) (weapon/incagi get-item)) 20 450)
-      (text-out hdc (format nil "現:~A 威力:~3d 増HP:~2D 増agi:~2d" (minimum-column 18 (weapon/name weapon)) (weapon/power weapon)  (weapon/inchp weapon) (weapon/incagi weapon)) 20 480)
+      (text-out hdc (format nil "得:~A 威力:~3d 増HP:~3D 増agi:~2d" (minimum-column 18 (weapon/name get-item)) (weapon/power get-item)  (weapon/inchp get-item) (weapon/incagi get-item)) 20 450)
+      (text-out hdc (format nil "現:~A 威力:~3d 増HP:~3D 増agi:~2d" (minimum-column 18 (weapon/name weapon)) (weapon/power weapon)  (weapon/inchp weapon) (weapon/incagi weapon)) 20 480)
       (text-out hdc "装備しますか？" 20 550)
       (with-slots (diffpower diffhp diffagi) get-item
 	(set-text-color hdc (cdr diffpower))
 	(text-out hdc (format nil "~A" (car diffpower)) 385 510)
 	(set-text-color hdc (cdr diffhp))
-	(text-out hdc (format nil "~A" (car diffhp)) 510 510)
+	(text-out hdc (format nil "~A" (car diffhp)) 525 510)
 	(set-text-color  hdc (cdr diffagi))
-	(text-out hdc (format nil "~A" (car diffagi)) 635 510)
+	(text-out hdc (format nil "~A" (car diffagi)) 650 510)
 	(delete-object font)))))
 
 ;;アイテム装備するか選択肢
@@ -159,15 +169,17 @@
 
 ;;バトル時のプレーヤーのステータス表示
 (defun render-battle-player-status (hdc hmemdc)
-  (with-slots (hp maxhp) *p*
-    (let ((font (create-font "MSゴシック" :height 33)))
+  (with-slots (hp maxhp str maxstr agi maxagi) *p*
+    (let ((font (create-font "ＭＳ ゴシック" :height 27)))
       (render-waku 470 600 500 128 hdc hmemdc)
       (select-object hdc font)
       (set-text-color hdc (encode-rgb 255 255 255))
-      (text-out hdc "もげ" 490 620)
-      (text-out hdc (format nil "~3d /~3d" hp maxhp) 650 620)
-      (render-hp-bar *p* 750 645 200 15 hdc)
-      (text-out hdc "回復薬:Ａキー" 490 670)
+      (text-out hdc "もげ" 490 605)
+      (text-out hdc (format nil "HP ~3d/~d" hp maxhp) 600 605)
+      (render-hp-bar *p* 750 625 200 15 hdc)
+      (text-out hdc (format nil "STR ~3d/~d" str maxstr) 585 635)
+      (text-out hdc (format nil "AGI ~3d/~d" agi maxagi) 585 665)
+      (text-out hdc "回復薬:Ａキー" 490 690)
       ;;(fuchidori-text 490 640 "もげ" hdc :textcolor (encode-rgb 255 255 255) :fuchicolor (encode-rgb 255 255 0))
       (delete-object font))))
 

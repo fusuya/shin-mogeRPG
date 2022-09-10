@@ -52,6 +52,7 @@ when drawing lots of small items on the screen."
 (defparameter *waku-black* nil)
 (defparameter *slash-img* nil)
 (defparameter *ankoku-img* nil)
+(defparameter *break-block-img* nil)
 
 (defun load-img (path)
   (load-image (namestring (merge-pathnames path *img-root*))
@@ -61,6 +62,7 @@ when drawing lots of small items on the screen."
 
 (defun load-images ()
   (setf *objs-img* (load-img "objs-img2.bmp")
+	*break-block-img* (load-img "break-block.bmp")
 	*waku-black* (load-img "waku-black.bmp")
         *p-walk-img* (load-img "p-ido-anime.bmp")
         *monsters-img* (load-img "monsters2.bmp")
@@ -71,6 +73,7 @@ when drawing lots of small items on the screen."
 
 (defun delete-imgs ()
   (delete-object *objs-img*)
+  (delete-object *break-block-img*)
   (delete-object *waku-img*)
   (delete-object *p-walk-img*)
   (delete-object *monsters-img*)
@@ -136,7 +139,7 @@ when drawing lots of small items on the screen."
   (delete-object *font2*))
 ;;font----------------------------------------------------------
 
-
+(defparameter *wait* 999)
 (defparameter *right* 96)
 (defparameter *left* 64)
 (defparameter *up*   32)
@@ -168,7 +171,7 @@ when drawing lots of small items on the screen."
 (defconstant +yuka+ 7)
 (defconstant +chest+ 13)
 (defconstant +kaidan+ 14)
-
+(defconstant +empty-chest+ 15)
 
 (defparameter *c-rect* nil) ;;クライアント領域
 
@@ -194,6 +197,7 @@ when drawing lots of small items on the screen."
 (defclass cell ()
   ((cell :initarg :cell :initform 0 :accessor cell/cell)
    (num :initarg :num :initform 0 :accessor cell/num)
+   (breaked :initarg :breaked :initform 0 :accessor cell/breaked)
    (item :initarg :item :initform nil :accessor cell/item)
    (dead-end :initarg :dead-end :initform nil :accessor cell/dead-end)))
 

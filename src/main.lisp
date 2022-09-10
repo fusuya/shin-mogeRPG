@@ -12,9 +12,9 @@
 (defun init-game ()
   (setf *game* (make-instance 'game :donjon (make-instance 'donjon) :state :explore
 			      :item-list (copy-tree *buki-d*))
-        *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 20 :maxhp 30
+        *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
                                    :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
-                                   :battle-state :action-select 
+                                   :battle-state :action-select :hammer 4
                                    :explore-state :player-move
                                    :potion 3
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
@@ -115,14 +115,14 @@
                 walk-num 0))))))
 
 ;;次の移動先座標ゲット
-(defun get-next-pos (next-dir mover)
-  (with-slots (posx posy) mover
-    (case next-dir
-      (:wait  (list posx posy))
-      (:right (list (1+ posx) posy))
-      (:left  (list (1- posx) posy))
-      (:up    (list posx (1- posy)))
-      (:down  (list posx (1+ posy))))))
+(defun get-next-pos (mover)
+  (with-slots (posx posy dir) mover
+    (cond
+      ((= dir *right*) (list (1+ posx) posy))
+      ((= dir *left*)  (list (1- posx) posy))
+      ((= dir *up*)    (list posx (1- posy)))
+      ((= dir *down*)  (list posx (1+ posy)))
+      (t (list posx posy)))))
 
 ;;移動先の地形ゲット
 (defun get-next-cell (next-pos)
@@ -131,35 +131,46 @@
 
 
 ;;移動先が床だったらいける
-(defun can-move? (next-dir mover)
-  (let* ((next-pos (get-next-pos next-dir mover))
+(defun search-next-cell (mover &key (nextcell +yuka+))
+  (let* ((next-pos (get-next-pos mover))
          (next-cell (get-next-cell next-pos)))
-    (= (cell/cell next-cell) +yuka+)))
+    (= (cell/cell next-cell) nextcell)))
+
+
+;;壁を壊す
+(defun break-soft-wall ()
+  (let* ((next-pos (get-next-pos *p*))
+	 (next-cell (get-next-cell next-pos)))
+    (setf (cell/cell next-cell) +yuka+
+	  (cell/breaked next-cell) 200)))
 
 
 ;;プレイヤーの方向更新
 (defun update-player-dir ()
-  (with-slots (right left up down) *keystate*
-    (with-slots (posx posy dir walk-flag) *p*
+  (with-slots (right left up down keyx) *keystate*
+    (with-slots (posx posy dir walk-flag hammer) *p*
       (cond
+	((and keyx (> hammer 0) (search-next-cell *p* :nextcell +soft-block+))
+	 (break-soft-wall)
+	 (decf hammer))
         (right
           (setf dir *right*)
-          (when (can-move? :right *p*)
+          (when (search-next-cell *p* :nextcell +yuka+)
             (setf walk-flag t)
             (incf posx)))
         (left
           (setf dir *left*)
-          (when (can-move? :left *p*)
+          (when (search-next-cell *p* :nextcell +yuka+)
             (setf walk-flag t)
             (decf posx)))
         (up
           (setf dir *up*)
-          (when (can-move? :up *p*)
+          (when (search-next-cell *p* :nextcell +yuka+)
             (setf walk-flag t)
             (decf posy)))
         (down
           (setf dir *down*)
-          (when (can-move? :down *p*)
+          (when (search-next-cell *p* :nextcell +yuka+)
             (setf walk-flag t)
             (incf posy)))))))
 
@@ -193,7 +204,8 @@
              (<= (* posy *cell-size*) drawy))
         (and (or (= dir *left*) (= dir *up*))
              (>= (* posx *cell-size*) drawx)
-             (>= (* posy *cell-size*) drawy)))))
+             (>= (* posy *cell-size*) drawy))
+	(= dir *wait*))))
 
 ;;プレイヤーの描画座標更新
 (defun update-position (mover)
@@ -209,6 +221,25 @@
         ((= dir *down*)
          (incf drawy d))))))
 
+
+;;拾ったアイテム装備
+(defun equip-get-item ()
+  (with-slots (weapon get-item maxhp maxagi maxstr hp str agi) *p*
+    (decf maxhp (weapon/inchp weapon))
+    (decf maxagi (weapon/incagi weapon))
+    (decf maxstr (weapon/power weapon))
+    (incf maxhp (weapon/inchp get-item))
+    (incf maxstr (weapon/power get-item))
+    (incf maxagi (weapon/incagi get-item))
+    (when (> hp maxhp)
+      (setf hp maxhp))
+    (when (> str maxstr)
+      (setf str maxstr))
+    (when (> agi maxagi)
+      (setf agi maxagi))
+    (setf weapon get-item
+	  get-item nil)))
+    
 ;;アイテムゲット
 (defun get-item (p)
   (with-slots (weapon get-item explore-state) p
@@ -218,8 +249,12 @@
 	   (sin-power (if (>= (random 3) 1)
 			  (+ power (random (max 1 (floor power 3))))
 			  (- power (random (max 1 (floor power 4))))))
-	   (inchp (random power))
-	   (incagi (random (max 1 (floor power 5))))
+	   (inchp (if (>= (random 3) 1)
+		      (random (max 1 (floor power 2)))
+		      (- (random (max 1 (floor power 2))))))
+	   (incagi (if (>= (random 3) 1)
+		       (random (max 1 (floor power 5)))
+		       (- (random (max 1 (floor power 5))))))
 	   (diffpower (- sin-power (weapon/power weapon)))
 	   (diffhp (- inchp (weapon/inchp weapon)))
 	   (diffagi (- incagi (weapon/incagi weapon)))
@@ -260,7 +295,8 @@
 	(when item
 	  (cond
 	    ((= item +chest+)
-	     (get-item mover))
+	     (get-item mover)
+	     (setf item +empty-chest+))
 	    ((= item +kaidan+)
 	     (go-to-next-stage))))))))
 
@@ -289,9 +325,9 @@
 
 ;;移動できる方向ゲット
 (defun get-can-move-dir (monster)
-  (loop :for dir :in '(:up :down :right :left :wait)
-        :for next-pos = (get-next-pos dir monster)
-        :when (can-move? dir monster)
+  (loop :for dir :in (list *up* *down* *right* *left* *wait*)
+	:do (setf (chara/dir monster) dir)
+        :when (search-next-cell monster :nextcell +yuka+)
         :collect dir))
 
 ;;モンスターランダム移動
@@ -299,16 +335,23 @@
   (with-slots (posx posy dir walk-flag) monster
     (let* ((can-move-dir (get-can-move-dir monster))
            (next-dir (nth (random (length can-move-dir)) can-move-dir)))
-      (case next-dir
-        (:up (setf dir *up*
-                   posy (1- posy)))
-        (:down (setf dir *down*
-                     posy (1+ posy)))
-        (:right (setf dir *right*
-                      posx (1+ posx)))
-        (:left (setf dir *left*
-                     posx (1- posx)))
-        (:wait))
+      (print "HOGE")
+      (format t "~S~%" can-move-dir)
+      (cond
+        ((= next-dir *up*)
+	 (setf dir *up*
+               posy (1- posy)))
+        ((= next-dir *down*)
+	 (setf dir *down*
+               posy (1+ posy)))
+        ((= next-dir *right*)
+	 (setf dir *right*
+               posx (1+ posx)))
+        ((= next-dir *left*)
+	 (setf dir *left*
+               posx (1- posx)))
+        ((= next-dir *wait*)
+	 ))
       (setf walk-flag t))))
 
 ;;モンスター更新
@@ -790,6 +833,21 @@
            (setf selected-skill cursor)
            (select-skill-action)))))))
 
+;;アイテム取得画面操作更新
+(defun update-get-item ()
+  (with-slots (up down keyz) *keystate*
+    (with-slots (cursor explore-state) *p*
+      (cond
+	((or up down)
+	 (if (= cursor 0)
+	     (incf cursor)
+	     (decf cursor)))
+	(keyz
+	 (when (= cursor 0)
+	   (equip-get-item))
+	 (setf explore-state :player-move
+	       cursor 0))))))
+
 ;;バトル時のプレイヤーターン更新
 (defun update-battle-player-turn ()
   (with-slots (battle-state) *p*
@@ -853,7 +911,9 @@
         (update-battle))
         ;;(debug-battle-monsters donjon))
       (:explore
-        (update-explore donjon)))
+       (if (eq (player/explore-state *p*) :get-item)
+	   (update-get-item)
+           (update-explore donjon))))
     (init-keystate)))
 
 
