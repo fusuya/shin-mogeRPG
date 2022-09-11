@@ -28,7 +28,10 @@
                                        +yuka+)
                                       (t
                                         +soft-block+))))
-                          (setf (aref arr y x) (make-instance 'cell :num num :cell cell))
+                          (setf (aref arr y x) (make-instance 'cell :num num :cell cell
+								    :posx x :posy y
+								    :drawx (* x *cell-size*)
+								    :drawy (* y *cell-size*)))
                           (incf num))))
     arr))
 

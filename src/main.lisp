@@ -14,7 +14,7 @@
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
                                    :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
-                                   :battle-state :action-select :hammer 4
+                                   :battle-state :action-select :hammer 14
                                    :explore-state :player-move
                                    :potion 3
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
@@ -31,9 +31,10 @@
 
 ;;キー押したとき
 (defun moge-keydown (hwnd wparam)
-  (with-slots (left right down up keyz keyx keyc keya) *keystate*
+  (with-slots (left right down up keyz keyx keyc keya shift) *keystate*
     (let ((key (virtual-code-key wparam)))
       (case key
+	(:shift (setf shift t))
         (:left (setf left t))
         (:right (setf right t))
         (:down (setf down t))
@@ -47,9 +48,10 @@
 
 ;;キー話したとき
 (defun moge-keyup (wparam)
-  (with-slots (left right down up keyz keyx keyc keya) *keystate*
+  (with-slots (shift left right down up keyz keyx keyc keya) *keystate*
     (let ((key (virtual-code-key wparam)))
       (case key
+	(:shift (setf shift nil))
         (:left (setf left nil))
         (:right (setf right nil))
         (:down (setf down nil))
@@ -106,7 +108,7 @@
 ;;歩行画像更新
 (defun update-walk-animation (walker)
   (with-slots (walk-img walk-num walk-flag) walker
-    (let ((tmp (if walk-flag 3 9)))
+    (let ((tmp (if walk-flag 5 13)))
       (incf walk-num)
       (when (zerop (mod walk-num tmp))
         (incf walk-img)
@@ -136,20 +138,42 @@
          (next-cell (get-next-cell next-pos)))
     (= (cell/cell next-cell) nextcell)))
 
+;;壁が壊れる時間更新
+(defun update-break-block ()
+  (loop :for blk :in (player/breakblock *p*)
+	:do (with-slots (breaked break-img) blk
+	      (when (> breaked 0)
+		(decf breaked)
+		(when (zerop (mod breaked 7))
+		  (incf break-img)
+		  (when (> break-img 3)
+		    (setf break-img 0
+			  breaked 0
+			  (player/breakblock *P*) (remove blk (player/breakblock *p*) :test #'equal))))))))
+	      
+		
 
 ;;壁を壊す
 (defun break-soft-wall ()
   (let* ((next-pos (get-next-pos *p*))
 	 (next-cell (get-next-cell next-pos)))
     (setf (cell/cell next-cell) +yuka+
-	  (cell/breaked next-cell) 200)))
+	  (cell/breaked next-cell) 200)
+    (push next-cell (player/breakblock *p*))))
 
 
 ;;プレイヤーの方向更新
 (defun update-player-dir ()
-  (with-slots (right left up down keyx) *keystate*
-    (with-slots (posx posy dir walk-flag hammer) *p*
+  (with-slots (right left up down keyx shift) *keystate*
+    (with-slots (posx posy dir walk-flag hammer dash) *p*
       (cond
+	((and shift
+	      (or right left up down))
+	 (setf dash t)
+	 (cond (right (setf dir *right*))
+	       (left (setf dir *left*))
+	       (up (setf dir *up*))
+	       (down (setf dir *down*))))
 	((and keyx (> hammer 0) (search-next-cell *p* :nextcell +soft-block+))
 	 (break-soft-wall)
 	 (decf hammer))
@@ -335,8 +359,6 @@
   (with-slots (posx posy dir walk-flag) monster
     (let* ((can-move-dir (get-can-move-dir monster))
            (next-dir (nth (random (length can-move-dir)) can-move-dir)))
-      (print "HOGE")
-      (format t "~S~%" can-move-dir)
       (cond
         ((= next-dir *up*)
 	 (setf dir *up*
@@ -381,37 +403,70 @@
     ;;(when (monsters-move-end? donjon)
     ;;  (setf (player/explore-state *p*) :player-move))))
 
+;;ダッシュ終わった後の描画位置をセット
+(defun set-draw-position (donjon)
+  (with-slots (posx posy drawx drawy) *p*
+    (setf drawx (* posx *cell-size*)
+	  drawy (* posy *cell-size*)))
+  (loop :for monster :in (donjon/monsters donjon)
+	:do (with-slots (posx posy drawx drawy) monster
+	      (setf drawx (* posx *cell-size*)
+		    drawy (* posy *cell-size*)))))
 
+;;ダッシュ
+(defun dash (donjon)
+  (with-slots (dir posx posy drawx drawy dash collide-monster) *p*
+    (loop :named moge
+	  :while (search-next-cell *p* :nextcell +yuka+)
+	  :do (cond
+		((= dir *right*) (incf posx))
+		((= dir *left*) (decf posx))
+		((= dir *up*) (decf posy))
+		((= dir *down*) (incf posy)))
+	      (loop :for monster :in (donjon/monsters donjon)
+		    :do (monster-random-move  monster)
+			(setf (chara/walk-flag monster) nil)
+			(when (collide-monster? *p* monster)
+			  (setf collide-monster monster)
+			  (return-from moge))))
+    (set-draw-position donjon)
+    (setf dash nil)))
+    
 
 ;;探索更新
 (defun update-explore (donjon)
-  (with-slots (explore-state walk-flag collide-monster walk-num walk-img) *p*
+  (with-slots (dash explore-state walk-flag collide-monster walk-num walk-img) *p*
+    (update-break-block)
     (update-player)
-    (unless collide-monster
-      (collide-monsters? donjon))
     (cond
-      ((and collide-monster
-            (null walk-flag)
-            (eq explore-state :player-move))
-       (save-player-pos)
-       (set-battle-pos)
-       (create-battle-monsters  donjon)
-       (delete-collide-monster donjon)
-       (setf (game/state *game*) :battle
-             collide-monster nil
-             explore-state :player-move
-             walk-num 0
-             walk-img 0))
-      ((eq explore-state :collide-m)
-       (update-monsters donjon)
-       (when (monsters-move-end? donjon)
-          (setf explore-state :player-move)))
+      (dash
+       (dash donjon))
       (t
-        (update-monsters donjon)
-        (unless collide-monster
-          (collide-monsters? donjon)
-          (when collide-monster
-            (setf explore-state :collide-m)))))))
+       (unless collide-monster
+	 (collide-monsters? donjon))
+       (cond
+	 ((and collide-monster
+               (null walk-flag)
+               (eq explore-state :player-move))
+	  (save-player-pos)
+	  (set-battle-pos)
+	  (create-battle-monsters  donjon)
+	  (delete-collide-monster donjon)
+	  (setf (game/state *game*) :battle
+		collide-monster nil
+		explore-state :player-move
+		walk-num 0
+		walk-img 0))
+	 ((eq explore-state :collide-m)
+	  (update-monsters donjon)
+	  (when (monsters-move-end? donjon)
+            (setf explore-state :player-move)))
+	 (t
+          (update-monsters donjon)
+          (unless collide-monster
+            (collide-monsters? donjon)
+            (when collide-monster
+              (setf explore-state :collide-m)))))))))
 
 
 ;;----------------------------battle-------------------------------------

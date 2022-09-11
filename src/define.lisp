@@ -62,7 +62,7 @@ when drawing lots of small items on the screen."
 
 (defun load-images ()
   (setf *objs-img* (load-img "objs-img2.bmp")
-	*break-block-img* (load-img "break-block.bmp")
+	*break-block-img* (load-img "break-block2.bmp")
 	*waku-black* (load-img "waku-black.bmp")
         *p-walk-img* (load-img "p-ido-anime.bmp")
         *monsters-img* (load-img "monsters2.bmp")
@@ -194,18 +194,14 @@ when drawing lots of small items on the screen."
 (defparameter *skelton* 224)
 
 ;;--------------------------------------------------------------
-(defclass cell ()
-  ((cell :initarg :cell :initform 0 :accessor cell/cell)
-   (num :initarg :num :initform 0 :accessor cell/num)
-   (breaked :initarg :breaked :initform 0 :accessor cell/breaked)
-   (item :initarg :item :initform nil :accessor cell/item)
-   (dead-end :initarg :dead-end :initform nil :accessor cell/dead-end)))
+
 
 (defclass keystate ()
   ((right :initarg :right :initform nil :accessor keystate/right)
    (left  :initarg :left  :initform nil :accessor keystate/left)
    (up    :initarg :up    :initform nil :accessor keystate/up)
    (down  :initarg :down  :initform nil :accessor keystate/down)
+   (shift :initarg :shift :initform nil :accessor keystate/shift)
    (keya  :initarg :keya  :initform nil :accessor keystate/keya)
    (keyz  :initarg :keyz  :initform nil :accessor keystate/keyz)
    (keyx  :initarg :keyx  :initform nil :accessor keystate/keyx)
@@ -217,6 +213,15 @@ when drawing lots of small items on the screen."
    (drawx :initarg :drawx :initform 0 :accessor obj/drawx)
    (drawy :initarg :drawy :initform 0 :accessor obj/drawy)
    (img :initarg :img :initform nil :accessor obj/img)))
+
+(defclass cell (obj)
+  ((cell :initarg :cell :initform 0 :accessor cell/cell)
+   (num :initarg :num :initform 0 :accessor cell/num)
+   (breaked :initarg :breaked :initform 0 :accessor cell/breaked)
+   (break-img :initarg :break-img :initform 0 :accessor cell/break-img)
+   (item :initarg :item :initform nil :accessor cell/item)
+   (dead-end :initarg :dead-end :initform nil :accessor cell/dead-end)))
+
 
 (defclass damage (obj)
   ((num :initarg :num :initform 0 :accessor damage/num)
@@ -249,6 +254,7 @@ when drawing lots of small items on the screen."
 
 (defclass player (chara)
   ((skill :initarg :skill :initform nil :accessor player/skill)
+   (dash :initarg :dash :initform nil :accessor player/dash)
    (weapon :initarg :weapon :initform 0 :accessor weapon/weapon)
    (skill-num :initarg :skill-num :initform 1 :accessor player/skill-num)
    (selected-skill :initarg :selected-skill :initform 0 :accessor player/selected-skill)
@@ -265,6 +271,7 @@ when drawing lots of small items on the screen."
    (cursor :initarg :cursor :initform 0 :accessor player/cursor)
    (potion :initarg :potion :initform 0 :accessor player/potion)
    (hammer :initarg :hammer :initform 0 :accessor player/potion)
+   (breakblock :initarg :brealblock :initform nil :accessor player/breakblock)
    (end-animation :initarg :end-animation :initform nil :accessor player/end-animation)
    (tempdrawx :initarg :tempdrawx :initform 0 :accessor player/tempdrawx)
    (tempdrawy :initarg :tempdrawy :initform 0 :accessor player/tempdrawy)))

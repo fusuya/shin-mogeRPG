@@ -76,9 +76,14 @@
 
 
 ;;bロック壊れた画像表示
-(defun render-break-block (x y hdc hmemdc)
-  (select-object hmemdc *break-block-img*)
-  (trans-blt (* x *cell-size*) (* y *cell-size*) 0 0 *cell-size* *cell-size* *cell-size* *cell-size* hdc hmemdc))
+(defun render-break-block (hdc hmemdc)
+  (with-slots (breakblock) *p*
+    (loop :for blk :in breakblock
+	  :do (with-slots (drawx drawy break-img) blk
+		(select-object hmemdc *break-block-img*)
+		(trans-blt (- drawx 48) (- drawy 48) (* 128 break-img) 0
+			   128 128 128 128 hdc hmemdc)))))
+
 
 (defun render-obj-img (x y cell item hdc hmemdc)
   (select-object hmemdc *objs-img*)
@@ -89,17 +94,19 @@
       (trans-blt posx posy (* item *cell-size*) 0 *cell-size* *cell-size* *cell-size* *cell-size* hdc hmemdc))))
 
 
+;;ステージのオブジェクト表示
 (defun render-stage (donjon hdc hmemdc)
   (with-slots (stage) donjon
     (loop :for y :from 0 :below *h-cell-num*
           :do (loop :for x :from 0 :below *w-cell-num*
-                    :do (with-slots (cell item breaked) (aref stage y x)
-                          (render-obj-img x y cell item hdc hmemdc)
-			  (when (> breaked 0)
-			    (render-break-block x y breaked hdc hmemdc)))))))
+                    :do (with-slots (cell item breaked break-img) (aref stage y x)
+                          (render-obj-img x y cell item hdc hmemdc))))))
+			  ;;(when (> breaked 0)
+			  ;;  (render-break-block x y break-img hdc hmemdc)))))))
 
 (defun render-donjon (donjon hdc hmemdc)
-  (render-stage donjon hdc hmemdc))
+  (render-stage donjon hdc hmemdc)
+  (render-break-block hdc hmemdc))
 
 (defun render-test (hdc)
   (with-slots (posx posy drawx drawy dir maxhp maxstr maxagi) *p*
