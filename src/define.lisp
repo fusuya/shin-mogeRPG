@@ -190,7 +190,7 @@ when drawing lots of small items on the screen."
 (defparameter *metal* 96)
 (defparameter *orc* 128)
 (defparameter *slime* 160)
-(defparameter *buble* 192)
+(defparameter *bubble* 192)
 (defparameter *skelton* 224)
 
 ;;--------------------------------------------------------------
@@ -282,6 +282,14 @@ when drawing lots of small items on the screen."
 (defclass orc (monster)
   ())
 
+(defclass slime (monster)
+  ())
+(defclass brigand (monster)
+  ())
+(defclass bubble (monster)
+  ())
+
+
 (defclass skill ()
   ((name :initarg :name :initform nil :accessor skill/name)
    (power :initarg :power :initform 0 :accessor skill/power)
@@ -291,6 +299,7 @@ when drawing lots of small items on the screen."
 
 (defclass donjon ()
   ((stage :initarg :stage :initform nil :accessor donjon/stage)
+   (floor-num :initarg :floor^num :initform 1 :accessor donjon/floor-num)
    (yuka-list :initarg :yuka-list :initform nil :accessor donjon/yuka-list)
    (monsters :initarg :monsters :initform nil :accessor donjon/monsters)
    (battle-monsters :initarg :battle-mosnters :initform nil :accessor donjon/battle-monsters)))

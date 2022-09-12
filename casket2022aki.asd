@@ -10,6 +10,7 @@
                   ((:file "package")
                    (:file "define")
                    (:file "item")
+		   (:file "util")
                    (:file "donjon")
                    (:file "monster")
                    (:file "render")

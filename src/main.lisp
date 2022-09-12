@@ -16,7 +16,7 @@
                                    :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
                                    :battle-state :action-select :hammer 14
                                    :explore-state :player-move
-                                   :potion 3
+                                   :potion 3 :lv 1
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
                                    :skill (set-player-skill))
         *keystate* (make-instance 'keystate))
@@ -65,21 +65,6 @@
 
 (defparameter *test* nil)
 
-;;重み付け抽選-----------------------------------------------
-(defun rnd-pick (i rnd lst len)
-  (if (= i len)
-      (1- i)
-      (if (< rnd (nth i lst))
-	  i
-	  (rnd-pick (1+ i) (- rnd (nth i lst)) lst len))))
-;;lst = *copy-buki*
-(defun weightpick (lst)
-  (let* ((lst1 (mapcar #'cdr lst))
-	 (total-weight (apply #'+ lst1))
-	 (len (length lst1))
-	 (rnd (random total-weight)))
-    (car (nth (rnd-pick 0 rnd lst1 len) lst))))
-;;------------------------------------------------------------
 
 ;;----------------------explore--------------------------------------
 
@@ -309,11 +294,11 @@
 
 ;;次のステージへ
 (defun go-to-next-stage ()
-  )
+  (create-maze )
 
 ;;アイテムの当たり判定
 (defun player-pos-event (mover)
-  (with-slots (posx posy) mover
+  (with-slots (posx posy explore-state) mover
     (let ((cell (aref (donjon/stage (game/donjon *game*)) posy posx)))
       (with-slots (item) cell
 	(when item
@@ -322,7 +307,7 @@
 	     (get-item mover)
 	     (setf item +empty-chest+))
 	    ((= item +kaidan+)
-	     (go-to-next-stage))))))))
+	     (setf explore-state :next))))))))
 
 ;;移動終わったかチェック
 (defmethod walk-end ((mover player))
@@ -439,6 +424,9 @@
     (update-break-block)
     (update-player)
     (cond
+      ((eq explore-state :next)
+       (create-maze donjon)
+       (setf explore-state :player-move))
       (dash
        (dash donjon))
       (t
