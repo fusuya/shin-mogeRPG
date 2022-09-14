@@ -172,15 +172,16 @@
     (set-obj-cell set-pos +kaidan+ stage)
     (setf pos-list (remove set-pos pos-list :test #'equal))
     ;;宝箱設置
-    (loop :repeat (min 8 (random (length pos-list)))
+    (loop :repeat (min 10 (+ 3 (random (- (length pos-list) 3))))
 	  :do (setf set-pos (nth (random (length pos-list)) pos-list))
 	      (set-obj-cell set-pos +chest+ stage)
 	      (setf pos-list (remove set-pos pos-list :test #'equal)))))
 
 ;;ダンジョン生成
 (defun create-maze (donjon)
-  (with-slots (stage) donjon
-    (setf stage (make-grid-array))
+  (with-slots (stage yuka-list) donjon
+    (setf stage (make-grid-array)
+	  yuka-list nil)
     (loop :until (end-mogeskal? stage)
           :do (mogeskal stage))
     (set-object-donjon stage)))

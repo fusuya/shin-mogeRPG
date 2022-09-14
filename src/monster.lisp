@@ -52,8 +52,8 @@
       (cond
 	((= kind *slime*) '((:slime . 100) (:orc . 70) (:brigand . 50) (:bubble . 20)))
 	((= kind *orc*) '((:slime . 100) (:orc . 170) (:brigand . 80) (:bubble . 80)))
-	((= kind *brigand*) '((:slime . 50) (:orc . 70) (:brigand . 150) (:bubble . 80) (:hydra 20)))
-	((= kind *bubble*) '((:slime . 30) (:orc . 50) (:brigand . 70) (:bubble . 120) (:hydra 60) (:skelton 30))))))) 
+	((= kind *brigand*) '((:slime . 50) (:orc . 70) (:brigand . 150) (:bubble . 80) (:hydra . 20)))
+	((= kind *bubble*) '((:slime . 30) (:orc . 50) (:brigand . 70) (:bubble . 120) (:hydra . 60) (:skelton . 30)))))))
 
 ;;slime
 (defun create-slime (x y lv)
@@ -117,7 +117,7 @@
 (Defun create-battle-monsters (donjon)
   (with-slots (battle-monsters floor-num) donjon
     (setf battle-monsters nil)
-    (let* ((monster-num (min 12 (+ (+ (1+ (random 3)) (floor floor-num 8)) (random (1+ (floor floor-num 4))))))
+    (let* ((monster-num 10);;(min 12 (+ (+ (1+ (random 3)) (floor floor-num 8)) (random (1+ (floor floor-num 4))))))
            (monsters-pos (nth monster-num *battle-monster-pos*))
 	   (battle-monster-rate (get-battle-monster-rate)))
         (loop :repeat monster-num

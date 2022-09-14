@@ -11,9 +11,10 @@
 
 (defun init-game ()
   (setf *game* (make-instance 'game :donjon (make-instance 'donjon) :state :explore
+			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
-                                   :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
+                                   :maxagi 30 :agi 30 :str 1 :tempdrawx 800 :tempdrawy 280
                                    :battle-state :action-select :hammer 14
                                    :explore-state :player-move
                                    :potion 3 :lv 1
@@ -88,7 +89,7 @@
           :do (when (collide-monster? *p* monster)
                 (setf (player/collide-monster *p*) monster)
                       ;;monsters (remove monster monsters :test #'equal))
-                (return)))))
+                (return t)))))
 
 ;;歩行画像更新
 (defun update-walk-animation (walker)
@@ -292,9 +293,6 @@
 					    :diffagi (cons diffagi agicolor))
 	    explore-state :get-item))))
 
-;;次のステージへ
-(defun go-to-next-stage ()
-  (create-maze )
 
 ;;アイテムの当たり判定
 (defun player-pos-event (mover)
@@ -408,12 +406,16 @@
 		((= dir *left*) (decf posx))
 		((= dir *up*) (decf posy))
 		((= dir *down*) (incf posy)))
+	      (when (collide-monsters? donjon)
+		(return-from moge))
 	      (loop :for monster :in (donjon/monsters donjon)
 		    :do (monster-random-move  monster)
 			(setf (chara/walk-flag monster) nil)
 			(when (collide-monster? *p* monster)
 			  (setf collide-monster monster)
-			  (return-from moge))))
+			  (return-from moge)))
+	      (when (player-pos-event *p*)
+		(return-from moge)))
     (set-draw-position donjon)
     (setf dash nil)))
     
@@ -426,6 +428,8 @@
     (cond
       ((eq explore-state :next)
        (create-maze donjon)
+       (create-monsters donjon)
+       (incf (donjon/floor-num donjon))
        (setf explore-state :player-move))
       (dash
        (dash donjon))
@@ -468,22 +472,22 @@
 ;;斬るのダメージ計算
 (defun slash-damage-calc ()
   (with-slots (str) *p*
-    (+ 2 (random (ash str -1))))) ;;TODO
+    (+ 2 (random (max 1 (floor str 2)))))) ;;TODO
 
 ;;二段切りのダメージ計算
 (defun double-slash-damage-calc ()
   (with-slots (str) *p*
-    (1+ (random (floor str 5)))))
+    (1+ (floor (random str) 5))))
 
 ;;凪払いのダメージ
 (defun swing-damage-calc ()
   (with-slots (str) *p*
-    (1+ (random (floor str 10)))))
+    (1+ (floor (random str) 10))))
 
 ;;乱れ切りのダメージ
 (defun chopped-damage-calc ()
   (with-slots (str) *p*
-    (1+ (random (floor str 8)))))
+    (1+ (floor (random str) 8))))
 
 ;;突撃のダメージ
 (defun assalut-damage-calc ()
@@ -491,13 +495,13 @@
     (let ((n (random (+ 30 agi))))
       (cond
         ((>= n 30)
-         (+ (floor str 3) (random (floor str 2))))
+         (+ (floor str 3) (floor (random str) 2)))
         (t "ミス")))))
 
 ;;暗黒ダメージ
 (Defun ankoku-damage-calc ()
   (with-slots (str) *p*
-    (1+ (random (floor str 5)))))
+    (1+ (floor (random str) 5))))
 
 ;;暗黒使えるか
 (defun can-ankoku? ()
@@ -510,7 +514,7 @@
     (decf hp (floor (* 3 maxhp) 10))))
 
 ;;プレイヤーへのダメージデータ生成
-(defun create-player-damaged-data (num color)
+(defun create-player-damaged-data (num color region)
   (with-slots (drawy damage drawx) *p*
     (let* ((tempy (+ drawy (random 60)))
            (topy  (- tempy (random 40)))
@@ -524,7 +528,7 @@
           (setf dmg-drawx (- drawx 10)
                 dx (- dx1)))
       (make-instance 'damage :dx dx :tempy tempy :topy topy :drawy tempy
-                             :dy 4 :color color
+                             :dy 4 :color color :region region
                              :dir dir :num num :drawx dmg-drawx))))
 
 
@@ -707,19 +711,21 @@
 
 ;;ポーションのモーション
 (defun update-potion-animation ()
-  (with-slots (hp maxhp damage walk-img walk-num end-animation) *p*
+  (with-slots (hp maxhp damage walk-img walk-num end-animation str maxstr agi maxagi) *p*
     (incf walk-num)
     (when (zerop (mod walk-num 8))
       (let ((heal-num (1+ (random 4))))
-        (incf walk-img)
+	(incf walk-img)
         (incf hp heal-num)
-        (push (create-player-damaged-data heal-num (encode-rgb 0 254 0)) damage)
+        (push (create-player-damaged-data heal-num (encode-rgb 0 254 0) :hp) damage)
         (when (>= walk-img 4)
           (setf walk-img 0))
         (when (>= hp maxhp)
           (setf walk-num 0
                 walk-img 0
                 hp maxhp
+		agi maxagi
+		str maxstr
                 end-animation t))))))
 
 ;;攻撃アニメの更新
@@ -903,10 +909,71 @@
        (update-attack-animation)))))
 
 ;;バトル時の敵の行動更新
+;;スケルトン
+(defmethod update-battle-monster-action ((skelton skelton))
+  (with-slots (str) skelton
+    (create-player-damaged-data (randval str) (encode-rgb 255 255 255) :hp)))
+
+;;ドラゴン
+(defmethod update-battle-monster-action ((dragon dragon))
+  (with-slots (str agi hp) dragon
+    (case (random 3)
+      (0 (create-player-damaged-data (randval str) (encode-rgb 125 125 125) :hpstr))
+      (1 (create-player-damaged-data (randval agi) (encode-rgb 255 125 0) :stragi))
+      (2 (create-player-damaged-data (randval hp) (encode-rgb 0 125 255) :hpagi)))))
+
+;;ヒドラ
+(defmethod update-battle-monster-action ((hydra hydra))
+  (with-slots (hp) hydra
+    (incf hp)
+    (create-player-damaged-data (randval hp) (encode-rgb 255 255 255) :hp)))
+
+;;バブル
+(defmethod update-battle-monster-action ((bubble bubble))
+  (with-slots (str agi) bubble
+    (create-player-damaged-data (floor (randval (+ str agi)) 3) (encode-rgb 125 255 0) :hpstragi)))
+    
+;;オーク
 (defmethod update-battle-monster-action ((orc orc))
   (with-slots (str) orc
-    (case (random 1) ;;TODO
-      (0 (1+ (random str))))))
+    (if (>= (random 3) 1)
+	(create-player-damaged-data (randval str) (encode-rgb 255 255 255) :hp)
+	(if (>= (random 3) 1)
+	    (create-player-damaged-data "ミス" (encode-rgb 255 255 255) :hp)
+	    (create-player-damaged-data (floor (randval (* str 1.7))) (encode-rgb 255 255 0) :hp)))))
+;;スライム
+(defmethod update-battle-monster-action ((slime slime))
+  (with-slots (str agi) slime
+    (if (= (random 2) 0)
+	(create-player-damaged-data (1+ (randval agi)) (encode-rgb 255 0 255) :agi)
+	(create-player-damaged-data (floor (randval str) 2) (encode-rgb 255 255 255) :hp))))
+
+;;brigand
+(defmethod update-battle-monster-action ((brigand brigand))
+  (with-slots (str agi) brigand
+    (case (random 3)
+      (0 (create-player-damaged-data (1+ (floor (randval str) 2)) (encode-rgb 255 255 255) :hp))
+      (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
+      (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
+
+;;プレイヤーのHP減らす
+(defun decrease-player-status (dmg)
+  (with-slots (region num) dmg
+    (with-slots (str agi hp) *p*
+      (when (numberp num)
+	(case region
+	  (:hp (setf hp (max 0 (- hp num))))
+	  (:str (setf str (max 1 (- str num))))
+	  (:agi (setf agi (max 1 (- agi num))))
+	  (:hpstr (setf hp (max 0 (- hp num))
+			str (max 0 (- str num))))
+	  (:stragi (setf str (max 0 (- str num))
+			 agi (max 0 (- agi num))))
+	  (:hpagi (setf hp (max 0 (- hp num))
+			agi (max 0 (- agi num))))
+	  (:hpstragi (setf hp (max 0 (- hp num))
+			   str (max 0 (- str num))
+			   agi (max 0 (- agi num)))))))))
 
 ;;バトル時の敵のターン更新
 (Defun update-battle-monsters-turn (donjon)
@@ -914,8 +981,8 @@
     (with-slots (battle-monsters) donjon
       (setf dir *guard*)
       (loop :for monster :in battle-monsters
-            :do (let* ((num (update-battle-monster-action monster))
-                       (dmg (create-player-damaged-data num (encode-rgb 255 255 255))))
+            :do (let* ((dmg (update-battle-monster-action monster)))
+		  (decrease-player-status dmg)
                   (push dmg damage)))
       (setf (game/battle-state *game*) :player-turn
             battle-state :action-select))))

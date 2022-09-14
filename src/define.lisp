@@ -225,6 +225,7 @@ when drawing lots of small items on the screen."
 
 (defclass damage (obj)
   ((num :initarg :num :initform 0 :accessor damage/num)
+   (region :initarg :region :initform nil :accessor damage/region)
    (timer :initarg :timer :initform 0 :accessor damage/timer)
    (tempy :initarg :tempy :initform 0 :accessor damage/tempy)
    (topy :initarg :topy :initform 0 :accessor damage/topy)
@@ -289,6 +290,14 @@ when drawing lots of small items on the screen."
 (defclass bubble (monster)
   ())
 
+(defclass hydra (monster)
+  ())
+
+(defclass skelton (monster)
+  ())
+
+(defclass dragon (monster)
+  ())
 
 (defclass skill ()
   ((name :initarg :name :initform nil :accessor skill/name)
@@ -308,6 +317,7 @@ when drawing lots of small items on the screen."
   ((donjon :initarg :donjon :initform nil :accessor game/donjon)
    (state :initarg :state :initform :title :accessor game/state)
    (item-list :initarg :item-list :initform nil :accessor game/item-list)
+   (start-time :initarg :start-time :initform 0 :accessor game/start-time)
    (battle-state :initarg :battle-state :initform :player-turn :accessor game/battle-state)))
 
 (defclass weapon ()
@@ -320,21 +330,3 @@ when drawing lots of small items on the screen."
    (diffpower :initarg :diffpower :initform nil :accessor weapon/diffpower)))
 
 
-;;時間変換
-(defun get-hms (n)
-  (multiple-value-bind (h m1) (floor n 3600000)
-    (multiple-value-bind (m s1) (floor m1 60000)
-      (multiple-value-bind (s ms1) (floor s1 1000)
-       (multiple-value-bind (ms) (floor ms1 10)
-          (values h m s ms))))))
-
-
-;;class copy
-(defun shallow-copy-object (original)
-  (let* ((class (class-of original))
-         (copy (allocate-instance class)))
-    (dolist (slot (mapcar #'sb-mop:slot-definition-name (sb-mop:class-slots class)))
-      (when (slot-boundp original slot)
-        (setf (slot-value copy slot)
-              (slot-value original slot))))
-    copy))

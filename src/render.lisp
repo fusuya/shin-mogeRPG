@@ -362,9 +362,26 @@
   (render-battle-monsters donjon hdc hmemdc)
   (render-battle-player hdc hmemdc))
 
+;;現在の階層を表示
+(defun render-floor-num (hdc donjon)
+  (with-slots (floor-num) donjon
+    (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+      (select-object hdc font)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (text-out hdc (format nil "地下~d階" floor-num) 10 610)
+      (delete-object font))))
+
+;;現在の経過時間表示
+(defun render-time (hdc start-time)
+  (multiple-value-bind (h m s ms) (get-hms (- (get-internal-real-time) start-time))
+    (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+      (select-object hdc font)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (text-out hdc (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 10 650)
+      (delete-object font))))
 
 (defun render-game (hdc hmemdc)
-  (with-slots (state donjon) *game*
+  (with-slots (state donjon start-time) *game*
     (case state
       (:battle
        (render-battle donjon hdc hmemdc))
@@ -375,4 +392,6 @@
        (when (eq :get-item (player/explore-state *p*))
 	 (render-item-get-window hdc hmemdc)
 	 (render-item-equip? hdc hmemdc))
+       (render-floor-num hdc donjon)
+       (render-time hdc start-time)
        (render-test hdc)))))
