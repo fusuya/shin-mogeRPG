@@ -15,6 +15,12 @@
 
 ;;モンスターシンボルの出現率
 (defparameter *symbol1-10* '((:slime . 300) (:orc . 100) (:brigand . 70) (:bubble . 30)))
+(defparameter *symbol11-20* '((:slime . 200) (:orc . 150) (:brigand . 100) (:bubble . 60) (:hydra . 50)))
+(defparameter *symbol21-30* '((:slime . 100) (:orc . 100) (:brigand . 80) (:bubble . 70) (:hydra . 70) (:skelton . 50)))
+(defparameter *symbol31-40* '((:slime . 50) (:orc . 70) (:brigand . 70) (:bubble . 70) (:hydra . 70) (:skelton . 70) (:dragon . 30)))
+(defparameter *symbol41-50* '((:slime . 30) (:orc . 40) (:brigand . 50) (:bubble . 50) (:hydra . 70) (:skelton . 70) (:dragon . 50)))
+  
+
 
 (defun create-map-monster (x y kind)
   (case kind
@@ -29,7 +35,16 @@
 			     :kind *brigand*))
     (:bubble
      (make-instance 'bubble :posx x :posy y :drawx (* x *cell-size*) :drawy (* y *cell-size*)
-			    :kind *bubble*))))
+			    :kind *bubble*))
+    (:hydra
+     (make-instance 'hydra :posx x :posy y :drawx (* x *cell-size*) :drawy (* y *cell-size*)
+			   :kind *hydra*))
+    (:skelton
+     (make-instance 'skelton :posx x :posy y :drawx (* x *cell-size*) :drawy (* y *cell-size*)
+			     :kind *skelton*))
+    (:dragon
+     (make-instance 'dragon :posx x :posy y :drawx (* x *cell-size*) :drawy (* y *cell-size*)
+			    :kind *dragon*))))
 
 
 ;;マップ上のモンスターシンボル作成
@@ -37,7 +52,11 @@
   (with-slots (yuka-list monsters floor-num) donjon
     (setf monsters nil)
     (let ((rate (cond
-		  ((>= 10 floor-num 1) *symbol1-10*))))
+		  ((>= 10 floor-num 1) *symbol1-10*)
+		  ((>= 20 floor-num 11) *symbol11-20*)
+		  ((>= 30 floor-num 21) *symbol21-30*)
+		  ((>= 40 floor-num 31) *symbol31-40*)
+		  ((>= 50 floor-num 41) *symbol41-50*))))
       (loop :repeat (+ 3 (random (+ 2 (floor floor-num 2))))
             :do (let ((yuka (nth (random (length yuka-list)) yuka-list))
 		      (kind (weightpick rate)))
@@ -53,13 +72,23 @@
 	((= kind *slime*) '((:slime . 100) (:orc . 70) (:brigand . 50) (:bubble . 20)))
 	((= kind *orc*) '((:slime . 100) (:orc . 170) (:brigand . 80) (:bubble . 80)))
 	((= kind *brigand*) '((:slime . 50) (:orc . 70) (:brigand . 150) (:bubble . 80) (:hydra . 20)))
-	((= kind *bubble*) '((:slime . 30) (:orc . 50) (:brigand . 70) (:bubble . 120) (:hydra . 60) (:skelton . 30)))))))
+	((= kind *bubble*) '((:slime . 30) (:orc . 50) (:brigand . 70) (:bubble . 120) (:hydra . 60) (:skelton . 30)))
+	((= kind *hydra*) '((:orc . 20) (:brigand . 50) (:bubble . 70) (:hydra . 120) (:skelton . 60) (:dragon . 5)))
+	((= kind *skelton*) '((:slime . 10) (:orc . 15) (:brigand . 30) (:bubble . 60) (:hydra . 70) (:skelton . 70) (:dragon . 25)))
+	((= kind *dragon*) '((:slime . 10) (:orc . 15) (:brigand . 30) (:bubble . 40) (:hydra . 60) (:skelton . 60) (:dragon . 45)))))))
 
+;;dragon
+(defun create-dragon (x y lv)
+  (let ((hp (+ 35 (floor (random lv)))))
+    (make-instance 'dragon :kind *dragon* :drawx x :drawy y :lv lv
+			   :hp hp :maxhp hp :exp (+ 30 (randval lv))
+			   :str (+ 1 (floor (random lv) 3))
+			   :agi (+ 1 (floor (random lv) 4)))))
 ;;slime
 (defun create-slime (x y lv)
   (let ((hp (+ 5 (floor (random lv) 3))))
     (make-instance 'slime :kind *slime* :drawx x :drawy y :lv lv
-			  :hp hp :maxhp hp
+			  :hp hp :maxhp hp :exp (+ 3 (randval lv))
 			  :str (+ 1 (floor (random lv) 3))
 			  :agi (+ 1 (floor (random lv) 4)))))
 
@@ -67,35 +96,35 @@
 (defun create-orc (x y lv)
   (let ((hp (+ 10 (random lv))))
     (make-instance 'orc :kind *orc* :drawx x :drawy y :lv lv
-			:hp hp :maxhp hp
+			:hp hp :maxhp hp :exp (+ 5 (randval lv))
 			:str (+ 5 (floor (random lv) 2))
 			:agi (+ 3 (floor (random lv) 5)))))
 ;;brigand
 (defun create-brigand (x y lv)
   (let ((hp (+ 7 (floor (random lv) 2))))
     (make-instance 'brigand :kind *brigand* :drawx x :drawy y :lv lv
-			    :hp hp :maxhp hp
+			    :hp hp :maxhp hp :exp (+ 7 (randval lv))
 			    :str (+ 4 (floor (random lv) 2))
 			    :agi (+ 4 (floor (random lv) 2)))))
 ;;bubble
 (defun create-bubble (x y lv)
   (let ((hp (+ 5 (floor (random lv) 3))))
     (make-instance 'bubble :kind *bubble* :drawx x :drawy y :lv lv
-			   :hp hp :maxhp hp
+			   :hp hp :maxhp hp :exp (+ 8 (randval lv))
 			   :str (+ 4 (floor (random lv) 3))
 			   :agi (+ 4 (floor (random lv) 3)))))
 ;;hydra
 (defun create-hydra (x y lv)
   (let ((hp (+ 20 (floor (random (* lv 1.5))))))
     (make-instance 'hydra :kind *hydra* :drawx x :drawy y :lv lv
-			  :hp hp :maxhp hp
+			  :hp hp :maxhp hp :exp (+ 10 (randval lv))
 			  :str (+ 9 (floor (random lv)))
 			  :agi (+ 3 (floor (random lv) 4)))))
 ;;skelton
 (defun create-skelton (x y lv)
   (let ((hp (+ 15 (floor (random (* lv 1.2))))))
     (make-instance 'skelton :kind *skelton* :drawx x :drawy y :lv lv
-			    :hp hp :maxhp hp
+			    :hp hp :maxhp hp :exp (+ 13 (randval lv))
 			    :str (+ 10 (floor (random (* lv 1.1))))
 			    :agi (+ 5 (floor (random lv))))))
 ;;

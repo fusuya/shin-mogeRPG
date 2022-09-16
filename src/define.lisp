@@ -99,7 +99,7 @@ when drawing lots of small items on the screen."
 
 
 (my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)
-(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assalut+ +ankoku+ +potion+)
+(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assalut+ +ankoku+)
 
 (defun delete-object-array (arr)
   (loop for i across arr
@@ -166,7 +166,9 @@ when drawing lots of small items on the screen."
 (defparameter *change-window-w* *window-w*)
 (defparameter *change-window-h* *window-h*)
 
+(defconstant +hammer+ 2)
 (defconstant +hard-block+ 3)
+(defconstant +potion+ 5)
 (defconstant +soft-block+ 6)
 (defconstant +yuka+ 7)
 (defconstant +chest+ 13)
@@ -243,6 +245,7 @@ when drawing lots of small items on the screen."
    (walk-num :initarg :walk-num :initform 0 :accessor chara/walk-num)
    (lv :initarg :lv :initform 0 :accessor :chara/lv)
    (damage :initarg :damage :initform nil :accessor chara/damage)
+   (exp :initarg :exp :initform 0 :accessor chara/exp)
    (heal-data :initarg :heal-data :initform nil :accessor chara/heal-data)
    (hp :initarg :hp :initform 0 :accessor chara/hp)
    (maxhp :initarg :maxhp :initform 0 :accessor chara/maxhp)
@@ -257,6 +260,7 @@ when drawing lots of small items on the screen."
   ((skill :initarg :skill :initform nil :accessor player/skill)
    (dash :initarg :dash :initform nil :accessor player/dash)
    (weapon :initarg :weapon :initform 0 :accessor weapon/weapon)
+   (max-exp :initarg :max-exp :initform 100 :accessor chara/max-exp)
    (skill-num :initarg :skill-num :initform 1 :accessor player/skill-num)
    (selected-skill :initarg :selected-skill :initform 0 :accessor player/selected-skill)
    (selected-enemy :initarg :selected-enmey :initform 0 :accessor player/selected-enemy)

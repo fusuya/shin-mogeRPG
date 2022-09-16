@@ -121,6 +121,26 @@
     (text-out hdc (format nil "maxstr:~d" maxstr) *donjon-w* 240)
     (text-out hdc (format nil "maxagi:~d" maxagi) *donjon-w* 280)))
 
+;;ステータス表示
+(defun render-status (donjon hdc hmemdc)
+  (with-slots (floor-num) donjon
+    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer) *p*
+      (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+	(select-object hdc font)
+	(set-text-color hdc (encode-rgb 155 255 200))
+	(text-out hdc (format nil "地下~d階" floor-num) *donjon-w* 5)
+	(set-text-color hdc (encode-rgb 115 155 255))
+	(text-out hdc "ステータス" *donjon-w* 45)
+	(set-text-color hdc (encode-rgb 255 255 255))
+	(text-out hdc (format nil " HP ~3d/~d" hp maxhp) *donjon-w* 85)
+	(text-out hdc (format nil "STR ~3d/~d" str maxstr) *donjon-w* 120)
+	(text-out hdc (format nil "AGI ~3d/~d" agi maxagi) *donjon-w* 155)
+	(text-out hdc (format nil "x ~d" potion) 840 200)
+	(text-out hdc (format nil "x ~d" hammer) 840 255)
+	(select-object hmemdc *objs-img*)
+	(trans-blt *donjon-w* 200 (* +potion+ 32) 0 32 32 32 32 hdc hmemdc)
+	(trans-blt *donjon-w* 250 (* +hammer+ 32) 0 32 32 32 32 hdc hmemdc)
+	(delete-object font)))))
 
 ;;枠
 (defun render-waku (x y w h hdc hmemdc)
@@ -132,8 +152,47 @@
   (select-object hmemdc *waku-black*)
   (trans-blt x y 0 0 128 128 w h hdc hmemdc))
 
+;;アイテムゲット
+(defun render-item-get-window (hdc hmemdc str)
+  (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+    (select-object hdc font)
+    (render-waku-black 200 200 400 100 hdc hmemdc)
+    (set-text-color hdc (encode-rgb 255 255 255))
+    (text-out hdc (format nil "~Aを手に入れた!" str) 240 230)
+    (delete-object font)))
+  
+			       
+;;レベルアップ画面
+(defun render-level-up-window (hdc hmemdc)
+  (with-slots (maxhp maxagi maxstr cursor) *p*
+    (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+      (select-object hdc font)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (render-waku-black 180 100 600 250 hdc hmemdc)
+      (text-out hdc "レベルアップ！" 370 110)
+      (text-out hdc "上昇させたいステータスを選んでください" 210 150)
+      (loop :for i :from 0 :to 2
+	    :for y :in '(200 240 280)
+	    :for x = 360
+	    :do
+	       (if (= i cursor)
+		   (progn
+		     (select-object hdc (aref *brush* +white+))
+		     (rectangle hdc x y (+ x 250) (+ y 30))
+		     (set-text-color hdc (encode-rgb 0 0 0)))
+		   (progn
+		     (set-text-color hdc (encode-rgb 255 255 255))))
+	       (cond
+		 ((= i 0)
+		  (text-out hdc (format nil "最大HP ~d → ~d" maxhp (+ maxhp 3)) x y))
+		 ((= i 1)
+		  (text-out hdc (format nil "最大STR ~d → ~d" maxstr (+ maxstr 1)) x y))
+		 ((= i 2)
+		  (text-out hdc (format nil "最大AGI ~d → ~d" maxagi (+ maxagi 1)) x y))))
+      (delete-object font))))
+
 ;;アイテムをゲットした時のメッセージウィンドウ
-(defun render-item-get-window (hdc hmemdc)
+(defun render-weapon-get-window (hdc hmemdc)
   (with-slots (weapon get-item) *p*
     (let ((font (create-font "ＭＳ ゴシック" :height 28)))
       (select-object hdc font)
@@ -153,7 +212,7 @@
 	(delete-object font)))))
 
 ;;アイテム装備するか選択肢
-(defun render-item-equip? (hdc hmemdc)
+(defun render-weapon-equip? (hdc hmemdc)
   (with-slots (cursor explore-state) *p*
     (let ((font (create-font "ＭＳ ゴシック" :height 28)))
       (select-object hdc font)
@@ -163,7 +222,7 @@
 	    :for y :in '(480 520)
 	    :for x = 830
 	    :do
-	       (if (and (= i cursor) (eq explore-state :get-item))
+	       (if (and (= i cursor) (eq explore-state :get-weapon))
 		   (progn
 		     (select-object hdc (aref *brush* +white+))
 		     (rectangle hdc x y (+ x 90) (+ y 30))
@@ -377,21 +436,29 @@
     (let ((font (create-font "ＭＳ ゴシック" :height 28)))
       (select-object hdc font)
       (set-text-color hdc (encode-rgb 255 255 255))
+      (text-out hdc "経過時間" 10 610)
+      (set-text-color hdc (encode-rgb 255 255 255))
       (text-out hdc (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 10 650)
       (delete-object font))))
 
 (defun render-game (hdc hmemdc)
   (with-slots (state donjon start-time) *game*
-    (case state
-      (:battle
-       (render-battle donjon hdc hmemdc))
-      (t
-       (render-donjon donjon hdc hmemdc)
-       (render-player hdc hmemdc)
-       (render-monsters donjon hdc hmemdc)
-       (when (eq :get-item (player/explore-state *p*))
-	 (render-item-get-window hdc hmemdc)
-	 (render-item-equip? hdc hmemdc))
-       (render-floor-num hdc donjon)
-       (render-time hdc start-time)
-       (render-test hdc)))))
+    (with-slots (explore-state) *P*
+      (case state
+	(:battle
+	 (render-battle donjon hdc hmemdc))
+	(t
+	 (render-donjon donjon hdc hmemdc)
+	 (render-player hdc hmemdc)
+	 (render-monsters donjon hdc hmemdc)
+	 (when (eq :get-weapon explore-state)
+	   (render-weapon-get-window hdc hmemdc)
+	   (render-weapon-equip? hdc hmemdc))
+	 (when (eq :get-potion explore-state)
+	   (render-item-get-window hdc hmemdc "ポーション"))
+	 (when (eq :get-hammer explore-state)
+	   (render-item-get-window hdc hmemdc "ハンマー"))
+	 (when (eq :level-up explore-state)
+	   (render-level-up-window hdc hmemdc))
+	 (render-time hdc start-time)
+	 (render-status donjon hdc hmemdc))))))

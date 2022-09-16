@@ -14,10 +14,10 @@
 			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
-                                   :maxagi 30 :agi 30 :str 1 :tempdrawx 800 :tempdrawy 280
+                                   :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
                                    :battle-state :action-select :hammer 14
                                    :explore-state :player-move
-                                   :potion 3 :lv 1
+                                   :potion 3 :lv 1 :exp 100 :max-exp 100
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
                                    :skill (set-player-skill))
         *keystate* (make-instance 'keystate))
@@ -233,14 +233,17 @@
 
 
 ;;拾ったアイテム装備
-(defun equip-get-item ()
+(defun equip-get-weapon ()
   (with-slots (weapon get-item maxhp maxagi maxstr hp str agi) *p*
     (decf maxhp (weapon/inchp weapon))
     (decf maxagi (weapon/incagi weapon))
     (decf maxstr (weapon/power weapon))
     (incf maxhp (weapon/inchp get-item))
+    (incf hp (weapon/inchp get-item))
     (incf maxstr (weapon/power get-item))
+    (incf str (weapon/power get-item))
     (incf maxagi (weapon/incagi get-item))
+    (incf agi (weapon/incagi get-item))
     (when (> hp maxhp)
       (setf hp maxhp))
     (when (> str maxstr)
@@ -251,7 +254,7 @@
 	  get-item nil)))
     
 ;;アイテムゲット
-(defun get-item (p)
+(defun get-weapon (p)
   (with-slots (weapon get-item explore-state) p
     (let* ((item (weightpick (game/item-list *game*)))
 	   (name (car item))
@@ -291,8 +294,28 @@
 					    :diffpower (cons diffpower powercolor)
 					    :diffhp (cons diffhp hpcolor)
 					    :diffagi (cons diffagi agicolor))
-	    explore-state :get-item))))
+	    explore-state :get-weapon))))
 
+;;potion get
+(defun get-potion (p)
+  (with-slots (explore-state potion) p
+    (incf potion)
+    (setf explore-state :get-potion)))
+
+;;hammer get
+(defun get-hammer (p)
+  (with-slots (explore-state hammer) p
+    (incf hammer)
+    (setf explore-state :get-hammer)))
+
+
+;;アイテムゲット
+(defun get-item (p)
+  (let ((n (random 9)))
+    (cond
+      ((>= 3 n 0) (get-weapon p))
+      ((= n 4) (get-hammer p))
+      ((>= 8 n 5) (get-potion p)))))
 
 ;;アイテムの当たり判定
 (defun player-pos-event (mover)
@@ -501,7 +524,7 @@
 ;;暗黒ダメージ
 (Defun ankoku-damage-calc ()
   (with-slots (str) *p*
-    (1+ (floor (random str) 5))))
+    (1+ (floor (randval str) 5))))
 
 ;;暗黒使えるか
 (defun can-ankoku? ()
@@ -621,9 +644,10 @@
   (with-slots (battle-monsters) (game/donjon *game*)
     (let ((dead? nil))
       (loop :for monster :in battle-monsters
-            :do (with-slots (hp) monster
+            :do (with-slots (hp exp) monster
                   (when (>= 0 hp)
 		    (format t "~d~%" (length battle-monsters))
+		    (incf (chara/exp *p*) exp) ;;プレイヤー経験値獲得
                     (setf battle-monsters (remove monster battle-monsters :test #'equal)
                           dead? t))))
       (when dead?
@@ -631,14 +655,16 @@
         (if battle-monsters
             (update-monsters-position)
             ;;敵が全滅した時
-            (with-slots (attack-num battle-state d-atk drawx drawy tempdrawx tempdrawy) *p*
+            (with-slots (attack-num exp battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
               (setf (game/state *game*) :explore
                     (game/battle-state *game*) :player-turn
                     attack-num 0
                     d-atk t
                     battle-state :action-select
                     drawx tempdrawx
-                    drawy tempdrawy)))))))
+                    drawy tempdrawy)
+	      (when (>= exp max-exp)
+		(setf explore-state :level-up))))))))
 
 
 ;;攻撃終わったあとの処理
@@ -882,8 +908,46 @@
            (setf selected-skill cursor)
            (select-skill-action)))))))
 
-;;アイテム取得画面操作更新
-(defun update-get-item ()
+;;レベルアップ画面更新
+(defun update-level-up ()
+  (with-slots (up down keyz) *keystate*
+    (with-slots (cursor explore-state hp maxhp str maxstr agi maxagi exp max-exp) *p*
+      (cond
+	(up
+	 (if (= cursor 0)
+	     (incf cursor 2)
+	     (decf cursor)))
+	(down
+	 (if (= cursor 2)
+	     (decf cursor 2)
+	     (incf cursor)))
+	(keyz
+	 (cond
+	   ((= cursor 0)
+	    (setf maxhp (+ maxhp 3)
+		  hp maxhp))
+	   ((= cursor 1)
+	    (setf maxstr (1+ maxstr)
+		  str maxstr))
+	   ((= cursor 2)
+	    (setf maxagi (1+ maxagi)
+		  agi maxagi)))
+	 (setf exp (- exp max-exp)
+	       max-exp (+ max-exp (floor max-exp) 10))
+	 (when (> max-exp exp)
+	   (setf explore-state :player-move
+		 cursor 0)))))))
+
+;;アイテムゲット画面操作
+(Defun update-get-item ()
+  (with-slots (keyz) *keystate*
+    (with-slots (explore-state) *p*
+    (when keyz
+      (setf explore-state :player-move)))))
+
+
+;;武器取得画面操作更新
+(defun update-get-weapon ()
   (with-slots (up down keyz) *keystate*
     (with-slots (cursor explore-state) *p*
       (cond
@@ -893,7 +957,7 @@
 	     (decf cursor)))
 	(keyz
 	 (when (= cursor 0)
-	   (equip-get-item))
+	   (equip-get-weapon))
 	 (setf explore-state :player-move
 	       cursor 0))))))
 
@@ -908,7 +972,7 @@
       (:attack-animation
        (update-attack-animation)))))
 
-;;バトル時の敵の行動更新
+;;バトル時の敵の行動更新------------------------------------------------------------------------
 ;;スケルトン
 (defmethod update-battle-monster-action ((skelton skelton))
   (with-slots (str) skelton
@@ -955,6 +1019,7 @@
       (0 (create-player-damaged-data (1+ (floor (randval str) 2)) (encode-rgb 255 255 255) :hp))
       (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
       (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
+;;--------------------------------------------------------------------------------------------------------
 
 ;;プレイヤーのHP減らす
 (defun decrease-player-status (dmg)
@@ -1021,9 +1086,17 @@
         (update-battle))
         ;;(debug-battle-monsters donjon))
       (:explore
-       (if (eq (player/explore-state *p*) :get-item)
-	   (update-get-item)
-           (update-explore donjon))))
+       (with-slots (explore-state) *p*
+	 (cond
+	   ((eq explore-state :get-weapon)
+	    (update-get-weapon))
+	   ((or (eq explore-state :get-potion)
+		(eq explore-state :get-hammer))
+	    (update-get-item))
+	   ((eq explore-state :level-up)
+	    (update-level-up))
+	   (t
+            (update-explore donjon))))))
     (init-keystate)))
 
 
