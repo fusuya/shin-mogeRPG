@@ -10,7 +10,7 @@
    (make-instance 'skill :name "暗黒" :power 10 :accuracy 80 :learn-lv 11)))
 
 (defun init-game ()
-  (setf *game* (make-instance 'game :donjon (make-instance 'donjon) :state :explore
+  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 50) :state :explore
 			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
@@ -27,8 +27,8 @@
   ;;(create-battle-monsters (game/donjon *game*)))
 
 (defun init-keystate ()
-  (with-slots (keya right left up down keyz) *keystate*
-    (setf keya nil right nil left nil up nil down nil keyz nil keya nil)))
+  (with-slots (keyx keya right left up down keyz) *keystate*
+    (setf keya nil right nil left nil up nil down nil keyz nil keya nil keyx nil)))
 
 ;;キー押したとき
 (defun moge-keydown (hwnd wparam)
@@ -385,7 +385,7 @@
 ;;モンスター更新
 (defun update-monster (monster)
   (with-slots (right left up down) *keystate*
-    (with-slots (walk-flag) monster
+    (with-slots (walk-flag kind) monster
      (update-walk-animation monster)
      (cond
       (walk-flag
@@ -393,7 +393,8 @@
         (walk-end monster))
       ((and (or right left up down)
             (chara/walk-flag *p*)
-            (null (player/collide-monster *p*)))
+            (null (player/collide-monster *p*))
+	    (/= kind *mogemos*))
        (monster-random-move monster))))))
 
 ;;モンスター全員動き終わった
@@ -450,9 +451,9 @@
     (update-player)
     (cond
       ((eq explore-state :next)
+       (incf (donjon/floor-num donjon))
        (create-maze donjon)
        (create-monsters donjon)
-       (incf (donjon/floor-num donjon))
        (setf explore-state :player-move))
       (dash
        (dash donjon))
@@ -557,15 +558,15 @@
 
 ;;単体へのダメージデータ生成
 (defun create-single-damage-data (target num)
-  (with-slots (damage drawx drawy hp) target
+  (with-slots (damage drawx drawy hp w h w2 h2) target
     (when (numberp num)
       (decf hp (min hp num)))
     (setf damage (make-instance 'damage :num num :timer 0 :color (encode-rgb 255 255 255)
                                         :dy 5 :dx -2
                                         :drawx (- drawx 5)
-                                        :drawy (+ drawy 52)
-                                        :tempy (+ drawy 52)
-                                        :topy  (+ drawy 30)))))
+                                        :drawy (+ drawy (- h2 12))
+                                        :tempy (+ drawy (- h2 12))
+                                        :topy  (+ drawy (- h2 34))))))
 ;;全体へのダメージデータ精製
 (defun create-all-damage-date (battle-monsters func)
   (loop :for monster :in battle-monsters
@@ -940,21 +941,24 @@
 
 ;;アイテムゲット画面操作
 (Defun update-get-item ()
-  (with-slots (keyz) *keystate*
+  (with-slots (keyz keyx) *keystate*
     (with-slots (explore-state) *p*
-    (when keyz
+    (when (or keyx keyz)
       (setf explore-state :player-move)))))
 
 
 ;;武器取得画面操作更新
 (defun update-get-weapon ()
-  (with-slots (up down keyz) *keystate*
+  (with-slots (up down keyz keyx) *keystate*
     (with-slots (cursor explore-state) *p*
       (cond
 	((or up down)
 	 (if (= cursor 0)
 	     (incf cursor)
 	     (decf cursor)))
+	(keyx
+	 (setf explore-state :player-move
+	       cursor 0))
 	(keyz
 	 (when (= cursor 0)
 	   (equip-get-weapon))

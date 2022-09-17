@@ -4,8 +4,39 @@
 (defparameter *edges* nil)
 (defparameter *grid* (make-array (list *h-cell-num* *w-cell-num*)))
 
+(defparameter *laststage*
+  (make-array (list *h-cell-num* *w-cell-num*)
+	      :initial-contents
+	      '((3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3)
+		(3 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 7 7 7 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 3)
+		(3 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 3)
+		(3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3))))
 
-
+(defun make-last-stage-cell ()
+  (let ((arr (make-array (list *h-cell-num* *w-cell-num*))))
+    (loop :for y :from 0 :below *h-cell-num*
+          :do (loop :for x :from 0 :below *w-cell-num*
+                    :do (let ((cell (aref *laststage* y x)))
+                          (setf (aref arr y x) (make-instance 'cell :cell cell
+								    :posx x :posy y
+								    :drawx (* x *cell-size*)
+								    :drawy (* y *cell-size*))))))
+    arr))
 
 (defun random-dir ()
   (case (random 4)
@@ -179,9 +210,15 @@
 
 ;;ダンジョン生成
 (defun create-maze (donjon)
-  (with-slots (stage yuka-list) donjon
-    (setf stage (make-grid-array)
-	  yuka-list nil)
-    (loop :until (end-mogeskal? stage)
-          :do (mogeskal stage))
-    (set-object-donjon stage)))
+  (with-slots (stage yuka-list floor-num) donjon
+    (cond
+      ((= floor-num 50)
+       (setf stage (make-last-stage-cell)
+	     (chara/dir *p*) *up*)
+       (set-player-init-pos '(12 13)))
+      (t
+       (setf stage (make-grid-array)
+	     yuka-list nil)
+       (loop :until (end-mogeskal? stage)
+             :do (mogeskal stage))
+       (set-object-donjon stage)))))

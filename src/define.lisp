@@ -99,7 +99,7 @@ when drawing lots of small items on the screen."
 
 
 (my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)
-(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assalut+ +ankoku+)
+(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assalut+ +ankoku+ +potion+)
 
 (defun delete-object-array (arr)
   (loop for i across arr
@@ -168,7 +168,7 @@ when drawing lots of small items on the screen."
 
 (defconstant +hammer+ 2)
 (defconstant +hard-block+ 3)
-(defconstant +potion+ 5)
+(defconstant +potion-img+ 5)
 (defconstant +soft-block+ 6)
 (defconstant +yuka+ 7)
 (defconstant +chest+ 13)
@@ -194,6 +194,7 @@ when drawing lots of small items on the screen."
 (defparameter *slime* 160)
 (defparameter *bubble* 192)
 (defparameter *skelton* 224)
+(defparameter *mogemos* 480)
 
 ;;--------------------------------------------------------------
 
@@ -243,6 +244,10 @@ when drawing lots of small items on the screen."
    (walk-flag :initarg :walk-flag :initform nil :accessor chara/walk-flag)
    (walk-img :initarg :walk-img :initform 0 :accessor chara/walk-img)
    (walk-num :initarg :walk-num :initform 0 :accessor chara/walk-num)
+   (w :initarg :w :initform 0 :accessor chara/w)
+   (h :initarg :h :initform 0 :accessor chara/h)
+   (w2 :initarg :w2 :initform 0 :accessor chara/w2)
+   (h2 :initarg :h2 :initform 0 :accessor chara/h2)
    (lv :initarg :lv :initform 0 :accessor :chara/lv)
    (damage :initarg :damage :initform nil :accessor chara/damage)
    (exp :initarg :exp :initform 0 :accessor chara/exp)
@@ -302,6 +307,8 @@ when drawing lots of small items on the screen."
 
 (defclass dragon (monster)
   ())
+(defclass mogemos (monster)
+  ())
 
 (defclass skill ()
   ((name :initarg :name :initform nil :accessor skill/name)
@@ -312,7 +319,7 @@ when drawing lots of small items on the screen."
 
 (defclass donjon ()
   ((stage :initarg :stage :initform nil :accessor donjon/stage)
-   (floor-num :initarg :floor^num :initform 1 :accessor donjon/floor-num)
+   (floor-num :initarg :floor-num :initform 1 :accessor donjon/floor-num)
    (yuka-list :initarg :yuka-list :initform nil :accessor donjon/yuka-list)
    (monsters :initarg :monsters :initform nil :accessor donjon/monsters)
    (battle-monsters :initarg :battle-mosnters :initform nil :accessor donjon/battle-monsters)))

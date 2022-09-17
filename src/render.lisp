@@ -53,11 +53,10 @@
        :transparent-color (encode-rgb 0 255 0)))
 
 
-(defun render-monster (monster hdc hmemdc &key (w2 32) (h2 32))
+(defun render-monster (monster hdc hmemdc)
   (select-object hmemdc *monsters-img*)
-  (with-slots (kind drawx drawy walk-img) monster
-    (let ((w 32) (h 32))
-      (trans-blt drawx drawy (* walk-img w) kind w h w2 h2 hdc hmemdc))))
+  (with-slots (kind drawx drawy walk-img w h w2 h2) monster
+    (trans-blt drawx drawy (* walk-img w) kind w h w2 h2 hdc hmemdc)))
 
 
 (defun render-monsters (donjon hdc hmemdc)
@@ -124,11 +123,11 @@
 ;;ステータス表示
 (defun render-status (donjon hdc hmemdc)
   (with-slots (floor-num) donjon
-    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer) *p*
+    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer weapon) *p*
       (let ((font (create-font "ＭＳ ゴシック" :height 28)))
 	(select-object hdc font)
 	(set-text-color hdc (encode-rgb 155 255 200))
-	(text-out hdc (format nil "地下~d階" floor-num) *donjon-w* 5)
+	(text-out hdc (format nil "地下~2,'0d階" floor-num) *donjon-w* 5)
 	(set-text-color hdc (encode-rgb 115 155 255))
 	(text-out hdc "ステータス" *donjon-w* 45)
 	(set-text-color hdc (encode-rgb 255 255 255))
@@ -137,8 +136,12 @@
 	(text-out hdc (format nil "AGI ~3d/~d" agi maxagi) *donjon-w* 155)
 	(text-out hdc (format nil "x ~d" potion) 840 200)
 	(text-out hdc (format nil "x ~d" hammer) 840 255)
+	(text-out hdc (format nil "現在の武器:~A" (weapon/name weapon)) 500 610)
+	(set-text-color hdc (encode-rgb 0 254 0))
+	(text-out hdc "Aキーで回復薬使用" 400 660)
+	(text-out hdc "Xキーでハンマー使用(壁壊せる)" 400 690)
 	(select-object hmemdc *objs-img*)
-	(trans-blt *donjon-w* 200 (* +potion+ 32) 0 32 32 32 32 hdc hmemdc)
+	(trans-blt *donjon-w* 200 (* +potion-img+ 32) 0 32 32 32 32 hdc hmemdc)
 	(trans-blt *donjon-w* 250 (* +hammer+ 32) 0 32 32 32 32 hdc hmemdc)
 	(delete-object font)))))
 
@@ -310,10 +313,9 @@
   (with-slots (walk-img selected-enemy) *p*
     (with-slots (battle-monsters) (game/donjon *game*)
       (select-object hmemdc *slash-img*)
-      (let* ((w 32) (h 32)
-             (target (nth selected-enemy battle-monsters))
-             (x (obj/drawx target)) (y (obj/drawy target)))
-        (trans-blt x y (* walk-img w) 0 w h (* w 2) (* h 2) hdc hmemdc)))))
+      (let* ((target (nth selected-enemy battle-monsters)))
+	(with-slots (drawx drawy w h w2 h2) target
+          (trans-blt drawx drawy (* walk-img w) 0 32 32 w2 h2 hdc hmemdc))))))
 
 ;;薙ぎ払いエフェクト
 (defun render-enemy-swinged (hdc hmemdc)
@@ -400,14 +402,14 @@
     (with-slots (cursor battle-state) *p*
       (loop :for monster :in battle-monsters
             :for i :from 0
-            :do (with-slots (drawx drawy lv damage hp) monster
-                  (let ((hpbar-x drawx) (hpbar-y (+ drawy 77))
+            :do (with-slots (drawx drawy lv damage hp h2 w2) monster
+                  (let ((hpbar-x drawx) (hpbar-y (+ drawy h2 13))
                         (lv-x (+ drawx 12)) (lv-y (- drawy 23)))
                     (when (and (= i cursor) (eq battle-state :enemy-select))
                       (select-object hdc (aref *brush* +white+))
-                      (rectangle hdc drawx drawy (+ drawx 64) (+ drawy 64)))
-                    (render-monster monster hdc hmemdc :w2 64 :h2 64)
-                    (render-hp-bar monster hpbar-x hpbar-y 64 8 hdc)
+                      (rectangle hdc drawx drawy (+ drawx w2) (+ drawy h2)))
+                    (render-monster monster hdc hmemdc)
+                    (render-hp-bar monster hpbar-x hpbar-y w2 8 hdc)
                     (render-monster-lv lv-x lv-y lv hdc)
                     (when damage
                       (render-damage damage hdc))
