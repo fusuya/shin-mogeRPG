@@ -36,14 +36,13 @@
   (rectangle hdc hp-right top decreased-hp-right bot))
 
 ;;HPバー表示
-(defun render-hp-bar (e left bot max-w bar-h hdc)
-  (with-slots (hp maxhp) e
-    (let* ((hp (floor (* (/ hp maxhp) max-w)))
-           (top (- bot bar-h))
-           (hp-right (+ left hp))
-           (decreased-hp (- max-w hp))
-           (decreased-hp-right (+ hp-right decreased-hp)))
-       (render-bar hdc left top bot hp-right decreased-hp-right))))
+(defun calc-bar (left bot max-w bar-h nownum maxnum hdc)
+  (let* ((nowhp (floor (* (/ nownum maxnum) max-w)))
+         (top (- bot bar-h))
+         (hp-right (+ left nowhp))
+         (decreased-hp (- max-w nowhp))
+         (decreased-hp-right (+ hp-right decreased-hp)))
+    (render-bar hdc left top bot hp-right decreased-hp-right)))
 
 
 (defun trans-blt (x y x-src y-src w-src h-src w-dest h-dest hdc hmemdc)
@@ -123,7 +122,7 @@
 ;;ステータス表示
 (defun render-status (donjon hdc hmemdc)
   (with-slots (floor-num) donjon
-    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer weapon) *p*
+    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer weapon exp max-exp) *p*
       (let ((font (create-font "ＭＳ ゴシック" :height 28)))
 	(select-object hdc font)
 	(set-text-color hdc (encode-rgb 155 255 200))
@@ -140,6 +139,9 @@
 	(set-text-color hdc (encode-rgb 0 254 0))
 	(text-out hdc "Aキーで回復薬使用" 400 660)
 	(text-out hdc "Xキーでハンマー使用(壁壊せる)" 400 690)
+	(set-text-color hdc (encode-rgb 212 254 44))
+	(text-out hdc (format nil "exp ~3d/~d" exp max-exp) 800 300)
+	(calc-bar 805 350 150 20 exp max-exp hdc)
 	(select-object hmemdc *objs-img*)
 	(trans-blt *donjon-w* 200 (* +potion-img+ 32) 0 32 32 32 32 hdc hmemdc)
 	(trans-blt *donjon-w* 250 (* +hammer+ 32) 0 32 32 32 32 hdc hmemdc)
@@ -245,7 +247,7 @@
       (set-text-color hdc (encode-rgb 255 255 255))
       (text-out hdc "もげ" 490 605)
       (text-out hdc (format nil "HP ~3d/~d" hp maxhp) 600 605)
-      (render-hp-bar *p* 750 625 200 15 hdc)
+      (calc-bar 750 625 200 15 hp maxhp hdc)
       (text-out hdc (format nil "STR ~3d/~d" str maxstr) 585 635)
       (text-out hdc (format nil "AGI ~3d/~d" agi maxagi) 585 665)
       (text-out hdc "回復薬:Ａキー" 490 690)
@@ -402,14 +404,14 @@
     (with-slots (cursor battle-state) *p*
       (loop :for monster :in battle-monsters
             :for i :from 0
-            :do (with-slots (drawx drawy lv damage hp h2 w2) monster
+            :do (with-slots (drawx drawy lv damage hp h2 w2 hp maxhp) monster
                   (let ((hpbar-x drawx) (hpbar-y (+ drawy h2 13))
                         (lv-x (+ drawx 12)) (lv-y (- drawy 23)))
                     (when (and (= i cursor) (eq battle-state :enemy-select))
                       (select-object hdc (aref *brush* +white+))
                       (rectangle hdc drawx drawy (+ drawx w2) (+ drawy h2)))
                     (render-monster monster hdc hmemdc)
-                    (render-hp-bar monster hpbar-x hpbar-y w2 8 hdc)
+                    (calc-bar hpbar-x hpbar-y w2 8 hp maxhp hdc)
                     (render-monster-lv lv-x lv-y lv hdc)
                     (when damage
                       (render-damage damage hdc))

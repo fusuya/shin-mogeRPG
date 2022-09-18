@@ -82,6 +82,17 @@ when drawing lots of small items on the screen."
   (delete-object *slash-img*)
   (delete-object *ankoku-img*))
 
+(defvar *slash-wav* (namestring (merge-pathnames "slash.wav" *sound-root*)))
+(defvar *ankoku-wav* (namestring (merge-pathnames "ankoku.wav" *sound-root*)))
+(defvar *assult-wav* (namestring (merge-pathnames "assult.wav" *sound-root*)))
+(defvar *chest-wav* (namestring (merge-pathnames "chest.wav" *sound-root*)))
+(defvar *damage-wav* (namestring (merge-pathnames "damage.wav" *sound-root*)))
+(Defvar *damage-str* (namestring (merge-pathnames "damage-str.wav" *sound-root*)))
+(defvar *damage-agi* (namestring (merge-pathnames "damage-agi.wav" *sound-root*)))
+(defvar *hammer-wav* (namestring (merge-pathnames "hammer.wav" *sound-root*)))
+(defvar *kaidan-wav* (namestring (merge-pathnames "kaidan.wav" *sound-root*)))
+(defvar *levelup-wav* (namestring (merge-pathnames "levelup.wav" *sound-root*)))
+(defvar *potion-wav* (namestring (merge-pathnames "potion.wav" *sound-root*)))
 
 (defparameter *brush* nil)
 ;;ブラシ生成
@@ -99,7 +110,7 @@ when drawing lots of small items on the screen."
 
 
 (my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)
-(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assalut+ +ankoku+ +potion+)
+(my-enum +slash+ +double-slash+ +swing+ +chopped+ +assault+ +ankoku+ +potion+)
 
 (defun delete-object-array (arr)
   (loop for i across arr
@@ -248,7 +259,7 @@ when drawing lots of small items on the screen."
    (h :initarg :h :initform 0 :accessor chara/h)
    (w2 :initarg :w2 :initform 0 :accessor chara/w2)
    (h2 :initarg :h2 :initform 0 :accessor chara/h2)
-   (lv :initarg :lv :initform 0 :accessor :chara/lv)
+   (lv :initarg :lv :initform 0 :accessor chara/lv)
    (damage :initarg :damage :initform nil :accessor chara/damage)
    (exp :initarg :exp :initform 0 :accessor chara/exp)
    (heal-data :initarg :heal-data :initform nil :accessor chara/heal-data)
@@ -274,13 +285,15 @@ when drawing lots of small items on the screen."
    (attack-num :initarg :attack-num :initform 0 :accessor player/attack-num)
    (chopped-num :initarg :chopped-num :initform 0 :accessor player/chopped-num)
    (d-atk :initarg :d-atk :initform 0 :accessor player/d-atk)
-   (assalut-flag :initarg :assalut-flag :initform nil :accessor player/assalut-flag)
+   (assault-flag :initarg :assault-flag :initform nil :accessor player/assault-flag)
+   (assault-topy :initarg :assault-topy :initform 240 :accessor player/assault-topy)
    (ankoku-img :initarg :ankoku-img :initform 0 :accessor player/ankoku-img)
    (collide-monster :initarg :collide-monster :initform nil :accessor player/collide-monster)
    (get-item :initarg :get-item :initform nil :accessor player/get-item)
    (cursor :initarg :cursor :initform 0 :accessor player/cursor)
    (potion :initarg :potion :initform 0 :accessor player/potion)
-   (hammer :initarg :hammer :initform 0 :accessor player/potion)
+   (hammer :initarg :hammer :initform 0 :accessor player/hammer)
+   (damage-flag :initarg :damage-flag :initform 0 :accessor player/damage-flag)
    (breakblock :initarg :brealblock :initform nil :accessor player/breakblock)
    (end-animation :initarg :end-animation :initform nil :accessor player/end-animation)
    (tempdrawx :initarg :tempdrawx :initform 0 :accessor player/tempdrawx)

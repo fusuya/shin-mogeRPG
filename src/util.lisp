@@ -1,6 +1,12 @@
 (in-package :casket2022aki)
 
 
+
+;;Œø‰Ê‰¹‚È‚ç‚·
+(defun sound-play (path)
+  (play-sound nil)
+  (play-sound path '(:filename :async)))
+
 (defun randval (n)
   (1+ (random (max 1 n))))
 

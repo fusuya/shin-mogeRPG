@@ -10,7 +10,7 @@
    (make-instance 'skill :name "暗黒" :power 10 :accuracy 80 :learn-lv 11)))
 
 (defun init-game ()
-  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 50) :state :explore
+  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 1) :state :explore
 			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
@@ -514,7 +514,7 @@
     (1+ (floor (random str) 8))))
 
 ;;突撃のダメージ
-(defun assalut-damage-calc ()
+(defun assault-damage-calc ()
   (with-slots (str agi) *p*
     (let ((n (random (+ 30 agi))))
       (cond
@@ -582,8 +582,8 @@
        (create-single-damage-data (nth selected-enemy battle-monsters) (double-slash-damage-calc)))
       ((= selected-skill +swing+)
        (create-all-damage-date battle-monsters #'swing-damage-calc))
-      ((= selected-skill +assalut+)
-       (create-single-damage-data (nth selected-enemy battle-monsters) (assalut-damage-calc)))
+      ((= selected-skill +assault+)
+       (create-single-damage-data (nth selected-enemy battle-monsters) (assault-damage-calc)))
       ((= selected-skill +chopped+)
        (let ((target (nth (random (length battle-monsters)) battle-monsters)))
          (create-single-damage-data target (chopped-damage-calc))))
@@ -618,13 +618,13 @@
 
 ;;ダメージ関係更新
 (defun update-player-damage-timer ()
-  (with-slots (damage dir) *p*
+  (with-slots (damage dir damage-flag) *p*
     (loop :for dmg :in damage
           :do (update-damage-position dmg)
               (when (> (damage/timer dmg) 30)
                 (setf damage (remove dmg damage :test #'equal))))
     (when (null damage)
-      (setf dir *left*))))
+      (setf damage-flag nil))))
 
 
 
@@ -640,6 +640,22 @@
                   (setf drawx (car pos)
                         drawy (cadr pos)))))))
 
+;;バトルに勝利
+(defun battle-end? (donjon)
+  (with-slots (battle-monsters) donjon
+    (unless battle-monsters 
+      ;;敵が全滅した時
+      (with-slots (attack-num exp battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
+	(setf (game/state *game*) :explore
+              (game/battle-state *game*) :player-turn
+              attack-num 0
+              d-atk t
+              battle-state :action-select
+              drawx tempdrawx
+              drawy tempdrawy)
+	(when (>= exp max-exp)
+	  (setf explore-state :level-up))))))
+
 ;;HPが0になった敵を消す
 (defun delete-dead-monsters ()
   (with-slots (battle-monsters) (game/donjon *game*)
@@ -647,25 +663,14 @@
       (loop :for monster :in battle-monsters
             :do (with-slots (hp exp) monster
                   (when (>= 0 hp)
-		    (format t "~d~%" (length battle-monsters))
 		    (incf (chara/exp *p*) exp) ;;プレイヤー経験値獲得
                     (setf battle-monsters (remove monster battle-monsters :test #'equal)
                           dead? t))))
       (when dead?
         (sleep 0.1) ;;敵が死んだときちょっと止める
         (if battle-monsters
-            (update-monsters-position)
-            ;;敵が全滅した時
-            (with-slots (attack-num exp battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
-              (setf (game/state *game*) :explore
-                    (game/battle-state *game*) :player-turn
-                    attack-num 0
-                    d-atk t
-                    battle-state :action-select
-                    drawx tempdrawx
-                    drawy tempdrawy)
-	      (when (>= exp max-exp)
-		(setf explore-state :level-up))))))))
+            (update-monsters-position))))))
+            
 
 
 ;;攻撃終わったあとの処理
@@ -673,6 +678,7 @@
   (with-slots (battle-state chopped-num attack-num agi selected-skill d-atk dir end-animation) *p*
     (setf end-animation nil)
     (cond
+      ;;二段切り
       ((and d-atk (= selected-skill +double-slash+))
        (setf d-atk nil
              battle-state :enemy-select))
@@ -681,11 +687,13 @@
        (setf (game/battle-state *game*) :enemy-turn
              d-atk t
              attack-num 0))
-      ((and (> chopped-num 0) (= selected-skill +chopped+))
+      ;;乱れ切り
+      ((and (> chopped-num 0) (= selected-skill +chopped+)
+	    (eq battle-state :attack-animation))
        (decf chopped-num)
+       (sound-play *slash-wav*)
        (create-damage-data (donjon/battle-monsters (game/donjon *game*))))
       (t ;;プレイヤーの次の攻撃へ
-       (incf attack-num)
        (setf battle-state :action-select
              d-atk t)))))
 
@@ -703,25 +711,25 @@
                 end-animation t))))))
 
 ;;突撃の攻撃モーション
-(defun update-assalut-animation ()
-  (with-slots (end-animation tempdrawy assalut-flag drawy walk-img walk-num) *p*
+(defun update-assault-animation ()
+  (with-slots (end-animation tempdrawy assault-flag assault-topy drawy walk-img walk-num) *p*
     (incf walk-num)
     (when (zerop (mod walk-num 3))
-      (if assalut-flag
+      (if assault-flag
           (incf drawy 8)
           (decf drawy 10))
       (cond
-        ((and (null assalut-flag)
-              (>= (- tempdrawy 40) drawy))
-         (setf assalut-flag t))
-        ((and assalut-flag
-              (>= drawy tempdrawy))
+        ((and (null assault-flag)
+              (>= assault-topy drawy))
+         (setf assault-flag t))
+        ((and assault-flag
+              (>= drawy (cadr *battle-pos*)))
          (setf walk-img 0
                walk-num 0
-               drawy tempdrawy
-               assalut-flag nil
+               drawy (cadr *battle-pos*)
+               assault-flag nil
                end-animation t))
-        ((and assalut-flag
+        ((and assault-flag
               (< walk-img 3))
          (incf walk-img))))))
 
@@ -768,32 +776,49 @@
        (update-ankoku-animation))
       ((= selected-skill +potion+)
        (update-potion-animation))
-      ((= selected-skill +assalut+)
-       (update-assalut-animation)))
+      ((= selected-skill +assault+)
+       (update-assault-animation)))
     (when end-animation
+      (print "hoge")
+      (delete-dead-monsters)
       (update-player-state)
-      (delete-dead-monsters))))
+      )))
 
 
-
+;;スキルの効果音
+(defun play-skill-sound (select)
+  (cond
+    ((or (= select +slash+)
+	 (= select +double-slash+)
+	 (= select +swing+)
+	 (= select +chopped+))
+     (sound-play *slash-wav*))
+    ((= select +ankoku+)
+     (sound-play *ankoku-wav*))
+    ((= select +assault+)
+     (sound-play *assult-wav*))))
+    
 
 ;;ターゲット選ぶか選ばないか
 (defun select-skill-action ()
   (with-slots (battle-monsters) (game/donjon *game*)
-    (with-slots (chopped-num cursor selected-skill battle-state str) *p*
+    (with-slots (chopped-num cursor selected-skill battle-state str attack-num) *p*
       (cond
         ((or (= selected-skill +slash+)
              (= selected-skill +double-slash+)
-             (= selected-skill +assalut+))
+             (= selected-skill +assault+))
          (setf battle-state :enemy-select
                cursor 0))
         ((or (= selected-skill +swing+)
              (= selected-skill +ankoku+))
          (create-damage-data battle-monsters)
+	 (play-skill-sound selected-skill)
          (setf battle-state :attack-animation
-               cursor 0))
+               cursor 0
+	       attack-num (1+ attack-num)))
         ((= selected-skill +chopped+)
          (create-damage-data battle-monsters)
+	 (play-skill-sound selected-skill)
          (setf chopped-num (1+ (random (floor str 3)))
                battle-state :attack-animation
                cursor 0))))))
@@ -801,13 +826,14 @@
 ;;ポーション使う
 (defun use-potion ()
   (with-slots (damage selected-skill hp battle-state maxhp dir) *p*
+    (sound-play *potion-wav*)
     (setf selected-skill +potion+
           battle-state :attack-animation)))
 
 ;;バトル中の攻撃する敵を選択 4-3 3-2 2-1 1-0
 (defun update-enemy-select ()
   (with-slots (battle-monsters) (game/donjon *game*)
-    (with-slots (cursor selected-skill selected-enemy battle-state) *p*
+    (with-slots (cursor selected-skill selected-enemy battle-state attack-num) *p*
       (with-slots (right left up down keyz) *keystate*
         (let* ((num (length battle-monsters)))
           (cond
@@ -858,7 +884,9 @@
             (keyz
              (setf battle-state :attack-animation
                    selected-enemy cursor
-                   cursor 0)
+                   cursor 0
+		   attack-num (1+ attack-num))
+	     (play-skill-sound selected-skill)
              (create-damage-data battle-monsters))))))))
 
 
@@ -934,7 +962,7 @@
 	    (setf maxagi (1+ maxagi)
 		  agi maxagi)))
 	 (setf exp (- exp max-exp)
-	       max-exp (+ max-exp (floor max-exp) 10))
+	       max-exp (+ max-exp (floor max-exp 10)))
 	 (when (> max-exp exp)
 	   (setf explore-state :player-move
 		 cursor 0)))))))
@@ -1023,6 +1051,14 @@
       (0 (create-player-damaged-data (1+ (floor (randval str) 2)) (encode-rgb 255 255 255) :hp))
       (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
       (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
+
+;;モゲモス
+(defmethod update-battle-monster-action  ((mogemos mogemos))
+  (with-slots (str agi) mogemos
+    (case (random 3)
+      (0 (create-player-damaged-data (1+ (floor (randval str) 2)) (encode-rgb 255 255 255) :hp))
+      (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
+      (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
 ;;--------------------------------------------------------------------------------------------------------
 
 ;;プレイヤーのHP減らす
@@ -1046,38 +1082,44 @@
 
 ;;バトル時の敵のターン更新
 (Defun update-battle-monsters-turn (donjon)
-  (with-slots (drawy damage drawx battle-state dir) *p*
+  (with-slots (damage battle-state damage-flag attack-num ) *p*
     (with-slots (battle-monsters) donjon
       (setf dir *guard*)
       (loop :for monster :in battle-monsters
-            :do (let* ((dmg (update-battle-monster-action monster)))
-		  (decrease-player-status dmg)
-                  (push dmg damage)))
+            :do (with-slots (kind) monster
+		  (let ((attack-num (if (eq kind *mogemos*) 3 1)))
+		    (loop :repeat attack-num
+			  :do
+			     (let* ((dmg (update-battle-monster-action monster)))
+			       (decrease-player-status dmg)
+			       (push dmg damage))))))
+      (sound-play *damage-wav* )
       (setf (game/battle-state *game*) :player-turn
+	    damage-flag t
             battle-state :action-select))))
 
 
           
 
-#|
+
 (defun update-player-wait-img ()
-  (with-slots (damage dir heal-data) *p*
+  (with-slots (damage-flag dir) *p*
     (cond
-      (damage (setf dir *guard*))
-      (heal-data (setf dir *heal*))
+      (damage-flag (setf dir *guard*))
       (t (setf dir *left*)))))
-|#
+
 ;;バトル関係更新
 (defun update-battle ()
   (with-slots (battle-state donjon) *game*
-    ;;(update-player-wait-img)
+    (update-player-wait-img)
     (case battle-state
       (:player-turn
        (update-battle-player-turn))
       (:enemy-turn
        (update-battle-monsters-turn donjon)))
     (update-player-damage-timer)
-    (update-enemy-damage-timer)))
+    (update-enemy-damage-timer)
+    (battle-end? donjon)))
 
 
 ;;----------------------------------------------------------

@@ -151,9 +151,14 @@
 ;;
 (defun create-battle-monster (kind x y floor-num)
   (with-slots (lv) *p*
-    (let ((monster-lv (if (>= (random 3) 1)
-			  (max 1 (- lv  (randval (floor floor-num 5))))
-			  (+ lv (random 4) (floor floor-num 3)))))
+    (let* ((hoge (random 3))
+	   (monster-lv (cond
+			((= hoge 0)
+			 (max 1 (- lv  (randval 3))))
+			((= hoge 1)
+			 (+ lv (random 4) (floor floor-num 3)))
+			((= hoge 2)
+			 lv))))
       (case kind
 	(:slime (create-slime x y monster-lv))
 	(:orc (create-orc x y monster-lv))
@@ -168,7 +173,7 @@
 (Defun create-battle-monsters (donjon)
   (with-slots (battle-monsters floor-num) donjon
     (setf battle-monsters nil)
-    (let* ((monster-num 10);;(min 12 (+ (+ (1+ (random 3)) (floor floor-num 8)) (random (1+ (floor floor-num 4))))))
+    (let* ((monster-num (if (= floor-num 50) 1 (min 12 (+ (randval 4) (randval (floor floor-num 8)) (randval (chara/lv *p*))))))
            (monsters-pos (nth monster-num *battle-monster-pos*))
 	   (battle-monster-rate (get-battle-monster-rate)))
         (loop :repeat monster-num
