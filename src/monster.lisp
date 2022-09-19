@@ -88,12 +88,12 @@
 
 ;;dragon
 (defun create-dragon (x y lv)
-  (let ((hp (+ 35 (floor (random lv)))))
+  (let ((hp (+ 35 (floor (randval lv)))))
     (make-instance 'dragon :kind *dragon* :drawx x :drawy y :lv lv
 			   :w 32 :h 32 :w2 64 :h2 64
 			   :hp hp :maxhp hp :exp (+ 30 (randval lv))
-			   :str (+ 1 (floor (random lv) 3))
-			   :agi (+ 1 (floor (random lv) 4)))))
+			   :str (+ 20 (floor (randval lv) 2))
+			   :agi (+ 20 (floor (randval lv) 3)))))
 ;;slime
 (defun create-slime (x y lv)
   (let ((hp (+ 5 (floor (random lv) 3))))
@@ -154,9 +154,9 @@
     (let* ((hoge (random 3))
 	   (monster-lv (cond
 			((= hoge 0)
-			 (max 1 (- lv  (randval 3))))
+			 (max 1 (- (+ lv (randval (floor floor-num 3)))  (randval 3))))
 			((= hoge 1)
-			 (+ lv (random 4) (floor floor-num 3)))
+			 (+ lv (random 4) (randval (floor floor-num 3))))
 			((= hoge 2)
 			 lv))))
       (case kind
@@ -166,6 +166,7 @@
 	(:bubble (create-bubble x y monster-lv))
 	(:hydra (create-hydra x y monster-lv))
 	(:skelton (create-skelton x y monster-lv))
+	(:dragon (create-dragon x y monster-lv))
 	(:mogemos (create-mogemos))))))
 
 

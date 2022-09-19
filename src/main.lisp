@@ -1,6 +1,6 @@
 (in-package :casket2022aki)
 
-(defun set-player-skill ()
+(defparameter *skill-list*
   (list
    (make-instance 'skill :name "斬る" :power 10 :accuracy 90 :learn-lv 1)
    (make-instance 'skill :name "二段斬り" :power 8 :accuracy 85 :learn-lv 3)
@@ -9,19 +9,25 @@
    (make-instance 'skill :name "突撃" :power 20 :accuracy 50 :learn-lv 9)
    (make-instance 'skill :name "暗黒" :power 10 :accuracy 80 :learn-lv 11)))
 
+(defun set-init-skill ()
+  (list (car *skill-list*)))
+
+(defun create-game ()
+  (setf *game* (make-instance 'game :state :title)
+	*p* (make-instance 'player :cursor 0)
+	*keystate* (make-instance 'keystate)))
+
 (defun init-game ()
-  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 1) :state :explore
+  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 50) :state :explore
 			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
-        *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 120 :maxhp 130 :maxstr 30
+        *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 30 :maxhp 30 :maxstr 30
                                    :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
-                                   :battle-state :action-select :hammer 14
+                                   :battle-state :action-select :hammer 10
                                    :explore-state :player-move
-                                   :potion 3 :lv 1 :exp 100 :max-exp 100
+                                   :potion 3 :lv 1 :exp 0 :max-exp 100
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
-                                   :skill (set-player-skill))
-        *keystate* (make-instance 'keystate))
-  (load-images)
+                                   :skill (set-init-skill)))
   (create-maze (game/donjon *game*))
   (create-monsters (game/donjon *game*)))
   ;;(create-battle-monsters (game/donjon *game*)))
@@ -69,6 +75,22 @@
 
 ;;----------------------explore--------------------------------------
 
+;;先に進むごとにアイテムのドロップレート変更
+(defun change-item-rate (donjon)
+  (with-slots (floor-num) donjon
+    (let ((r 0) (decr 0))
+      (cond
+	((>= 10 floor-num 1)  (setf r 2000 decr 50))
+	((>= 20 floor-num 11) (setf r 1000 decr 20))
+	((>= 30 floor-num 21) (setf r 500 decr 10))
+	((>= 40 floor-num 31)  (setf r 300 decr 5))
+	((>= 50 floor-num 41)  (setf r 100 decr 3)))
+      (setf (game/item-list *game*)
+	    (loop :for b :in (game/item-list *game*)
+		  :collect (let ((rate (cdr b)))
+			     (if (>= rate r)
+				 (cons (car b) (- rate decr))
+				 b)))))))
 
 ;;接触した敵を消す
 (defun delete-collide-monster (donjon)
@@ -148,11 +170,23 @@
     (push next-cell (player/breakblock *p*))))
 
 
+;;ポーション使う
+(Defun use-potion-explore ()
+  (with-slots (potion hp maxhp str maxstr agi maxagi) *p*
+    (when (or (/= hp maxhp) (/= agi maxagi) (/= str maxstr))
+      (sound-play *potion-wav*)
+      (setf potion (1- potion)
+	    hp maxhp
+	    str maxstr
+	    agi maxagi))))
+    
+
 ;;プレイヤーの方向更新
 (defun update-player-dir ()
-  (with-slots (right left up down keyx shift) *keystate*
-    (with-slots (posx posy dir walk-flag hammer dash) *p*
+  (with-slots (right left up down keyx shift keya) *keystate*
+    (with-slots (potion posx posy dir walk-flag hammer dash) *p*
       (cond
+	;;ダッシュ
 	((and shift
 	      (or right left up down))
 	 (setf dash t)
@@ -160,9 +194,14 @@
 	       (left (setf dir *left*))
 	       (up (setf dir *up*))
 	       (down (setf dir *down*))))
+	;;ハンマー
 	((and keyx (> hammer 0) (search-next-cell *p* :nextcell +soft-block+))
 	 (break-soft-wall)
+	 (sound-play *hammer-wav*)
 	 (decf hammer))
+	;;ポーション
+	((and (> potion 0) keya)
+	 (use-potion-explore))
         (right
           (setf dir *right*)
           (when (search-next-cell *p* :nextcell +yuka+)
@@ -311,11 +350,11 @@
 
 ;;アイテムゲット
 (defun get-item (p)
-  (let ((n (random 9)))
+  (let ((n (random 7)))
     (cond
       ((>= 3 n 0) (get-weapon p))
       ((= n 4) (get-hammer p))
-      ((>= 8 n 5) (get-potion p)))))
+      ((>= 6 n 5) (get-potion p)))))
 
 ;;アイテムの当たり判定
 (defun player-pos-event (mover)
@@ -325,9 +364,11 @@
 	(when item
 	  (cond
 	    ((= item +chest+)
+	     (sound-play *chest-wav*)
 	     (get-item mover)
 	     (setf item +empty-chest+))
 	    ((= item +kaidan+)
+	     (sound-play *kaidan-wav*)
 	     (setf explore-state :next))))))))
 
 ;;移動終わったかチェック
@@ -446,12 +487,14 @@
 
 ;;探索更新
 (defun update-explore (donjon)
-  (with-slots (dash explore-state walk-flag collide-monster walk-num walk-img) *p*
+  (with-slots (dash explore-state walk-flag collide-monster walk-num walk-img max-attack-num agi tempdir dir) *p*
     (update-break-block)
     (update-player)
     (cond
+      ;;階段
       ((eq explore-state :next)
        (incf (donjon/floor-num donjon))
+       (change-item-rate donjon)
        (create-maze donjon)
        (create-monsters donjon)
        (setf explore-state :player-move))
@@ -461,6 +504,7 @@
        (unless collide-monster
 	 (collide-monsters? donjon))
        (cond
+	 ;;敵とぶつかった
 	 ((and collide-monster
                (null walk-flag)
                (eq explore-state :player-move))
@@ -468,14 +512,18 @@
 	  (set-battle-pos)
 	  (create-battle-monsters  donjon)
 	  (delete-collide-monster donjon)
+	  (sound-play *collide-monster-wav*)
 	  (setf (game/state *game*) :battle
 		collide-monster nil
 		explore-state :player-move
 		walk-num 0
-		walk-img 0))
+		walk-img 0
+		tempdir dir
+		max-attack-num (1+ (truncate (/ (max 0 agi) 15)))))
+	 ;;敵からぶつかってきた
 	 ((eq explore-state :collide-m)
 	  (update-monsters donjon)
-	  (when (monsters-move-end? donjon)
+	  (when (monsters-move-end? donjon) ;;歩き終わるの待つ
             (setf explore-state :player-move)))
 	 (t
           (update-monsters donjon)
@@ -572,9 +620,20 @@
   (loop :for monster :in battle-monsters
         :do (create-single-damage-data monster (funcall func))))
 
+;;HPが0以上敵を取り出す
+(defun get-alive-monsters ()
+  (with-slots (battle-monsters) (game/donjon *game*)
+    (remove-if #'(lambda (m) (<= (chara/hp m) 0)) battle-monsters)))
+
+;;乱れ切りのターゲット決定
+(defun get-chopped-target ()
+  (let ((targets (get-alive-monsters)))
+    (when targets
+       (nth (random (length targets)) targets))))
+
 ;;ダメージのデータ生成
 (defun create-damage-data (battle-monsters)
-  (with-slots (selected-skill selected-enemy hp maxhp) *p*
+  (with-slots (selected-skill selected-enemy hp maxhp chopped-num) *p*
     (cond
       ((= selected-skill +slash+)
        (create-single-damage-data (nth selected-enemy battle-monsters) (slash-damage-calc)))
@@ -585,8 +644,11 @@
       ((= selected-skill +assault+)
        (create-single-damage-data (nth selected-enemy battle-monsters) (assault-damage-calc)))
       ((= selected-skill +chopped+)
-       (let ((target (nth (random (length battle-monsters)) battle-monsters)))
-         (create-single-damage-data target (chopped-damage-calc))))
+       (let* ((target (get-chopped-target)))
+	 (if target
+             (progn (sound-play *slash-wav*)
+		    (create-single-damage-data target (chopped-damage-calc)))
+	     (setf chopped-num 0))))
       ((= selected-skill +ankoku+)
        (create-all-damage-date battle-monsters #'ankoku-damage-calc)))))
 
@@ -642,31 +704,37 @@
 
 ;;バトルに勝利
 (defun battle-end? (donjon)
-  (with-slots (battle-monsters) donjon
-    (unless battle-monsters 
-      ;;敵が全滅した時
-      (with-slots (attack-num exp battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
+  (with-slots (battle-monsters floor-num) donjon
+    (with-slots (attack-num exp dir tempdir battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
+      (when (eq battle-state :battle-end)
+	;;敵が全滅した時
 	(setf (game/state *game*) :explore
               (game/battle-state *game*) :player-turn
               attack-num 0
               d-atk t
+	      dir tempdir
               battle-state :action-select
               drawx tempdrawx
               drawy tempdrawy)
 	(when (>= exp max-exp)
-	  (setf explore-state :level-up))))))
+	  (sound-play *levelup-wav*)
+	  (setf explore-state :level-up))
+	(when (= floor-num 50)
+	  (setf (game/state *game*) :gameclear
+		(game/end-time *game*) (get-internal-real-time)))))))
 
 ;;HPが0になった敵を消す
 (defun delete-dead-monsters ()
   (with-slots (battle-monsters) (game/donjon *game*)
     (let ((dead? nil))
       (loop :for monster :in battle-monsters
-            :do (with-slots (hp exp) monster
+            :do (with-slots (hp exp damage) monster
                   (when (>= 0 hp)
 		    (incf (chara/exp *p*) exp) ;;プレイヤー経験値獲得
                     (setf battle-monsters (remove monster battle-monsters :test #'equal)
                           dead? t))))
       (when dead?
+	;;(sound-play *monster-dead-wav* )
         (sleep 0.1) ;;敵が死んだときちょっと止める
         (if battle-monsters
             (update-monsters-position))))))
@@ -674,16 +742,18 @@
 
 
 ;;攻撃終わったあとの処理
-(defun update-player-state ()
-  (with-slots (battle-state chopped-num attack-num agi selected-skill d-atk dir end-animation) *p*
+(defun update-player-state (donjon)
+  (with-slots (battle-state chopped-num max-attack-num attack-num agi selected-skill d-atk dir end-animation) *p*
     (setf end-animation nil)
     (cond
+      ((null (donjon/battle-monsters donjon))
+       (setf battle-state :battle-end))
       ;;二段切り
       ((and d-atk (= selected-skill +double-slash+))
        (setf d-atk nil
              battle-state :enemy-select))
       ;;プレイヤーのターン終了
-      ((>= attack-num (1+ (truncate (/ (max 0 agi) 15))))
+      ((>= attack-num max-attack-num)
        (setf (game/battle-state *game*) :enemy-turn
              d-atk t
              attack-num 0))
@@ -691,7 +761,6 @@
       ((and (> chopped-num 0) (= selected-skill +chopped+)
 	    (eq battle-state :attack-animation))
        (decf chopped-num)
-       (sound-play *slash-wav*)
        (create-damage-data (donjon/battle-monsters (game/donjon *game*))))
       (t ;;プレイヤーの次の攻撃へ
        (setf battle-state :action-select
@@ -763,9 +832,11 @@
 		str maxstr
                 end-animation t))))))
 
+
+
 ;;攻撃アニメの更新
-(defun update-attack-animation ()
-  (with-slots (selected-skill walk-img walk-num attack-num end-animation) *p*
+(defun update-attack-animation (donjon)
+  (with-slots (battle-state selected-skill walk-img walk-num attack-num end-animation) *p*
     (cond
       ((or (= selected-skill +slash+)
            (= selected-skill +double-slash+)
@@ -779,9 +850,8 @@
       ((= selected-skill +assault+)
        (update-assault-animation)))
     (when end-animation
-      (print "hoge")
       (delete-dead-monsters)
-      (update-player-state)
+      (update-player-state donjon)
       )))
 
 
@@ -824,9 +894,10 @@
                cursor 0))))))
 
 ;;ポーション使う
-(defun use-potion ()
-  (with-slots (damage selected-skill hp battle-state maxhp dir) *p*
+(defun use-potion-battle ()
+  (with-slots (damage selected-skill hp battle-state maxhp dir potion) *p*
     (sound-play *potion-wav*)
+    (decf potion)
     (setf selected-skill +potion+
           battle-state :attack-animation)))
 
@@ -892,12 +963,13 @@
 
 ;;バトル中の行動選択
 (defun update-action-select ()
-  (with-slots (potion cursor skill selected-skill) *p*
+  (with-slots (potion cursor skill selected-skill attack-num) *p*
     (with-slots (right left up down keyz keya) *keystate*
       (let ((skill-num (length skill)))
         (cond
           ((and keya (> potion 0))
-           (use-potion))
+	   (incf attack-num)
+           (use-potion-battle))
           ((and keya (= potion 0))
            nil) ;;TODO sound
           (right
@@ -920,16 +992,22 @@
                (incf cursor 2))
               ((and (= cursor 3) (= skill-num 5))
                (incf cursor 1))
-              ((= skill-num 1)
+              ((or (= skill-num 1) (= cursor 4))
                nil)
               (t
                (decf cursor))))
           (down
            (cond
-             ((or (= cursor 2) (= cursor 5))
-              (decf cursor 2))
-             ((>= skill-num 2)
-              (incf cursor 1))))
+              ((or (= cursor 2) (= cursor 5))
+               (decf cursor 2))
+              ((and (= cursor 1) (= skill-num 2))
+               (decf cursor 1))
+              ((and (= cursor 4) (= skill-num 5))
+               (decf cursor 1))
+              ((or (= skill-num 1) (= skill-num 4))
+               nil)
+              (t
+               (incf cursor))))
           ((and keyz (= cursor +ankoku+)
                 (not (can-ankoku?)))
            nil) ;;TODO sound
@@ -940,7 +1018,7 @@
 ;;レベルアップ画面更新
 (defun update-level-up ()
   (with-slots (up down keyz) *keystate*
-    (with-slots (cursor explore-state hp maxhp str maxstr agi maxagi exp max-exp) *p*
+    (with-slots (cursor explore-state hp maxhp str maxstr agi maxagi exp max-exp lv skill) *p*
       (cond
 	(up
 	 (if (= cursor 0)
@@ -963,9 +1041,40 @@
 		  agi maxagi)))
 	 (setf exp (- exp max-exp)
 	       max-exp (+ max-exp (floor max-exp 10)))
+	 (incf lv)
+	 (cond
+	   ((= lv 3)
+	    (setf skill (append skill (list (nth 1 *skill-list*)))))
+	   ((= lv 5)
+	    (setf skill (append skill (list (nth 2 *skill-list*)))))
+	   ((= lv 7)
+	    (setf skill (append skill (list (nth 3 *skill-list*)))))
+	   ((= lv 9)
+	    (setf skill (append skill (list (nth 4 *skill-list*)))))
+	   ((= lv 10)
+	    (setf skill (append skill (list (nth 5 *skill-list*))))))
 	 (when (> max-exp exp)
 	   (setf explore-state :player-move
 		 cursor 0)))))))
+
+;;ゲームオーバー画面
+(defun update-gameover (hwnd)
+  (with-slots (up down keyz) *keystate*
+    (with-slots (cursor) *p*
+      (cond
+	(up
+	 (if (= cursor 0)
+	     (incf cursor 2)
+	     (decf cursor)))
+	(down
+	 (if (= cursor 2)
+	     (decf cursor 2)
+	     (incf cursor)))
+	(keyz
+	 (if (= cursor 0)
+	     (init-game)
+	     (send-message hwnd (const +wm-close+) nil nil)))))))
+	     
 
 ;;アイテムゲット画面操作
 (Defun update-get-item ()
@@ -993,8 +1102,10 @@
 	 (setf explore-state :player-move
 	       cursor 0))))))
 
+;;敵が消えるの松
+
 ;;バトル時のプレイヤーターン更新
-(defun update-battle-player-turn ()
+(defun update-battle-player-turn (donjon)
   (with-slots (battle-state) *p*
     (case battle-state
       (:action-select
@@ -1002,7 +1113,10 @@
       (:enemy-select
        (update-enemy-select))
       (:attack-animation
-       (update-attack-animation)))))
+       (update-attack-animation donjon)))))
+      ;;(:no-monsters
+      ;; (unless (donjon/battle-monsters donjon)
+	;; (setf battle-state :battle-end))))))
 
 ;;バトル時の敵の行動更新------------------------------------------------------------------------
 ;;スケルトン
@@ -1022,7 +1136,7 @@
 (defmethod update-battle-monster-action ((hydra hydra))
   (with-slots (hp) hydra
     (incf hp)
-    (create-player-damaged-data (randval hp) (encode-rgb 255 255 255) :hp)))
+    (create-player-damaged-data (randval (floor (* hp 0.8))) (encode-rgb 255 255 255) :hp)))
 
 ;;バブル
 (defmethod update-battle-monster-action ((bubble bubble))
@@ -1082,7 +1196,7 @@
 
 ;;バトル時の敵のターン更新
 (Defun update-battle-monsters-turn (donjon)
-  (with-slots (damage battle-state damage-flag attack-num ) *p*
+  (with-slots (damage battle-state damage-flag attack-num damage-sound max-attack-num agi hp) *p*
     (with-slots (battle-monsters) donjon
       (setf dir *guard*)
       (loop :for monster :in battle-monsters
@@ -1093,20 +1207,37 @@
 			     (let* ((dmg (update-battle-monster-action monster)))
 			       (decrease-player-status dmg)
 			       (push dmg damage))))))
-      (sound-play *damage-wav* )
-      (setf (game/battle-state *game*) :player-turn
-	    damage-flag t
-            battle-state :action-select))))
+      (setf damage-flag t
+	    battle-state :action-select
+	    damage-sound (length damage))
+      ;;(sound-play *damage-wav* )
+      (if (<= hp 0)
+	  (setf (game/battle-state *game*) :wait-gameover)
+	  (setf (game/battle-state *game*) :player-turn
+		max-attack-num (1+ (truncate (/ (max 0 agi) 15))))))))
 
-
+;;ダメーじ受けた効果音
+(defun play-damaged-sound ()
+  (with-slots (frame) *game*
+    (with-slots (damage-sound) *p*
+      (when (and (> damage-sound 0)
+		 (zerop (mod frame 7)))
+	(sound-play *damage-wav*)
+	(decf damage-sound)))))
           
 
-
+;;プレイヤーの状態画像
 (defun update-player-wait-img ()
   (with-slots (damage-flag dir) *p*
     (cond
       (damage-flag (setf dir *guard*))
       (t (setf dir *left*)))))
+
+;;ダメージ消えるまで待機
+(defun wait-end-damage ()
+  (with-slots (damage-flag) *p*
+    (unless damage-flag
+      (setf (game/state *game*) :gameover))))
 
 ;;バトル関係更新
 (defun update-battle ()
@@ -1114,20 +1245,36 @@
     (update-player-wait-img)
     (case battle-state
       (:player-turn
-       (update-battle-player-turn))
+       (update-battle-player-turn donjon))
       (:enemy-turn
-       (update-battle-monsters-turn donjon)))
+       (update-battle-monsters-turn donjon))
+      (:wait-gameover
+       (wait-end-damage)))
     (update-player-damage-timer)
     (update-enemy-damage-timer)
+    ;;(delete-dead-monsters)
+    (play-damaged-sound)
     (battle-end? donjon)))
 
 
 ;;----------------------------------------------------------
+(defun increase-frame ()
+  (with-slots (frame) *game*
+    (incf frame)
+    (when (= frame 1000)
+      (setf frame 0))))
+
 
 ;;ゲームループ
-(defun main-game-loop ()
+(defun main-game-loop (hwnd)
   (with-slots (state donjon) *game*
     (case state
+      (:gameclear
+       (update-gameover hwnd))
+      (:title
+       (update-gameover hwnd))
+      (:gameover
+       (update-gameover hwnd))
       (:battle
         (update-battle))
         ;;(debug-battle-monsters donjon))
@@ -1143,6 +1290,7 @@
 	    (update-level-up))
 	   (t
             (update-explore donjon))))))
+    (increase-frame)
     (init-keystate)))
 
 
@@ -1175,8 +1323,9 @@
   (set-brush)
   (set-font)
   ;;(init-bgm)
-  ;;(load-images)
-  (init-game)
+  (load-images)
+  ;;(init-game)
+  (create-game)
   ;;(set-client-size hwnd)
   ;;(bgm-play (bgm-alias *game*))
   (setf *c-rect* (get-client-rect hwnd))
@@ -1247,11 +1396,11 @@
                        (dispatch-message msg))))
                   (t
                     (sleep 0.01)
-                    (main-game-loop)
+                    (main-game-loop hwnd)
                     (invalidate-rect hwnd nil nil)))))
             (msg-lparam msg))
         (progn
-         (delete-font)
-         (delete-imgs)
-         (delete-brush)
+        ;; (delete-font)
+        ;; (delete-imgs)
+        ;; (delete-brush)
          (unregister-class myclass))))))

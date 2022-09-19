@@ -33,3 +33,7 @@
                        (dr (cdr b)))
                    (setf (nth 1 bk) (- (* i 2) 1))
                    (cons bk (max 1 (floor (*  (exp e) 10000)))))))
+
+(defun buki-hoge ()
+  (loop :for b :in *buki-d*
+	:collect (setf (cdr b) (- (cdr b) 100))))

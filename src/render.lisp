@@ -122,30 +122,35 @@
 ;;ステータス表示
 (defun render-status (donjon hdc hmemdc)
   (with-slots (floor-num) donjon
-    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer weapon exp max-exp) *p*
-      (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+    (with-slots (posx posy drawx drawy dir hp str agi maxhp maxstr maxagi potion hammer weapon exp max-exp lv) *p*
+      (let ((font (create-font "ＭＳ ゴシック" :height 28))
+	    (font2 (create-font "ＭＳ ゴシック" :height 23)))
 	(select-object hdc font)
 	(set-text-color hdc (encode-rgb 155 255 200))
 	(text-out hdc (format nil "地下~2,'0d階" floor-num) *donjon-w* 5)
 	(set-text-color hdc (encode-rgb 115 155 255))
 	(text-out hdc "ステータス" *donjon-w* 45)
 	(set-text-color hdc (encode-rgb 255 255 255))
-	(text-out hdc (format nil " HP ~3d/~d" hp maxhp) *donjon-w* 85)
-	(text-out hdc (format nil "STR ~3d/~d" str maxstr) *donjon-w* 120)
-	(text-out hdc (format nil "AGI ~3d/~d" agi maxagi) *donjon-w* 155)
-	(text-out hdc (format nil "x ~d" potion) 840 200)
+	(text-out hdc (format nil " LV  ~2d" lv) *donjon-w* 80)
+	(text-out hdc (format nil " HP ~3d/~d" hp maxhp) *donjon-w* 110)
+	(text-out hdc (format nil "STR ~3d/~d" str maxstr) *donjon-w* 140)
+	(text-out hdc (format nil "AGI ~3d/~d" agi maxagi) *donjon-w* 170)
+	(text-out hdc (format nil "x ~d" potion) 840 210)
 	(text-out hdc (format nil "x ~d" hammer) 840 255)
 	(text-out hdc (format nil "現在の武器:~A" (weapon/name weapon)) 500 610)
-	(set-text-color hdc (encode-rgb 0 254 0))
-	(text-out hdc "Aキーで回復薬使用" 400 660)
-	(text-out hdc "Xキーでハンマー使用(壁壊せる)" 400 690)
 	(set-text-color hdc (encode-rgb 212 254 44))
 	(text-out hdc (format nil "exp ~3d/~d" exp max-exp) 800 300)
+	(set-text-color hdc (encode-rgb 0 254 0))
+	(select-object hdc font2)
+	(text-out hdc "Aキーで回復薬使用" 400 640)
+	(text-out hdc "Xキーでハンマー使用(壁壊せる)" 400 665)
+	(text-out hdc "shift+方向キーでダッシュ" 400 690)
 	(calc-bar 805 350 150 20 exp max-exp hdc)
 	(select-object hmemdc *objs-img*)
-	(trans-blt *donjon-w* 200 (* +potion-img+ 32) 0 32 32 32 32 hdc hmemdc)
+	(trans-blt *donjon-w* 210 (* +potion-img+ 32) 0 32 32 32 32 hdc hmemdc)
 	(trans-blt *donjon-w* 250 (* +hammer+ 32) 0 32 32 32 32 hdc hmemdc)
-	(delete-object font)))))
+	(delete-object font)
+	(delete-object font2)))))
 
 ;;枠
 (defun render-waku (x y w h hdc hmemdc)
@@ -169,15 +174,19 @@
 			       
 ;;レベルアップ画面
 (defun render-level-up-window (hdc hmemdc)
-  (with-slots (maxhp maxagi maxstr cursor) *p*
+  (with-slots (maxhp maxagi maxstr cursor lv) *p*
     (let ((font (create-font "ＭＳ ゴシック" :height 28)))
       (select-object hdc font)
       (set-text-color hdc (encode-rgb 255 255 255))
-      (render-waku-black 180 100 600 250 hdc hmemdc)
+      (render-waku-black 180 100 600 280 hdc hmemdc)
+      (set-text-color hdc (encode-rgb 255 100 255))
       (text-out hdc "レベルアップ！" 370 110)
-      (text-out hdc "上昇させたいステータスを選んでください" 210 150)
+      (set-text-color hdc (encode-rgb 95 115 195))
+      (text-out hdc (format nil "Lv ~d → LV ~d" lv (1+ lv)) 380 140)
+      (set-text-color hdc (encode-rgb 255 255 255))
+      (text-out hdc "上昇させたいステータスを選んでください" 210 170)
       (loop :for i :from 0 :to 2
-	    :for y :in '(200 240 280)
+	    :for y :in '(210 250 290)
 	    :for x = 360
 	    :do
 	       (if (= i cursor)
@@ -194,6 +203,14 @@
 		  (text-out hdc (format nil "最大STR ~d → ~d" maxstr (+ maxstr 1)) x y))
 		 ((= i 2)
 		  (text-out hdc (format nil "最大AGI ~d → ~d" maxagi (+ maxagi 1)) x y))))
+      (set-text-color hdc (encode-rgb 90 175 90))
+      (cond
+	((= lv 2) (text-out hdc "二段斬りを覚えた！" 350 330))
+	((= lv 4) (text-out hdc "なぎ払いを覚えた！" 350 330))
+	((= lv 6) (text-out hdc "乱れ斬りを覚えた！" 350 330))
+	((= lv 8) (text-out hdc "突撃を覚えた！" 350 330))
+	((= lv 9) (text-out hdc "暗黒を覚えた！" 350 330)))
+ 
       (delete-object font))))
 
 ;;アイテムをゲットした時のメッセージウィンドウ
@@ -240,18 +257,21 @@
 
 ;;バトル時のプレーヤーのステータス表示
 (defun render-battle-player-status (hdc hmemdc)
-  (with-slots (hp maxhp str maxstr agi maxagi) *p*
+  (with-slots (hp maxhp str maxstr agi maxagi potion) *p*
     (let ((font (create-font "ＭＳ ゴシック" :height 27)))
       (render-waku 470 600 500 128 hdc hmemdc)
       (select-object hdc font)
       (set-text-color hdc (encode-rgb 255 255 255))
-      (text-out hdc "もげ" 490 605)
+      (text-out hdc "You" 490 605)
       (text-out hdc (format nil "HP ~3d/~d" hp maxhp) 600 605)
       (calc-bar 750 625 200 15 hp maxhp hdc)
       (text-out hdc (format nil "STR ~3d/~d" str maxstr) 585 635)
       (text-out hdc (format nil "AGI ~3d/~d" agi maxagi) 585 665)
       (text-out hdc "回復薬:Ａキー" 490 690)
       ;;(fuchidori-text 490 640 "もげ" hdc :textcolor (encode-rgb 255 255 255) :fuchicolor (encode-rgb 255 255 0))
+      (text-out hdc (format nil "x ~d" potion) 720 690)
+      (select-object hmemdc *objs-img*)
+      (trans-blt 680 690 (* 32 +potion-img+) 0 32 32 32 32 hdc hmemdc)
       (delete-object font))))
 
 ;;バトル時のプレイヤー待機画像描画
@@ -268,7 +288,7 @@
     (trans-blt 750 drawy (* walk-img w) 32 w h (* w 2) (* h 2) hdc hmemdc)))
 
 ;;突撃のアニメーション
-(defun render-assalut-animation (walk-img drawy hdc hmemdc)
+(defun render-assault-animation (walk-img drawy hdc hmemdc)
   (select-object hmemdc *p-atk-img*)
   (let ((w 48) (h 32))
     (trans-blt 750 drawy (* walk-img w) 0 w h (* w 2) (* h 2) hdc hmemdc)))
@@ -291,8 +311,8 @@
   (cond
     ((= selected-skill +potion+)
      (render-potion-animation walk-img drawy hdc hmemdc))
-    ((= selected-skill +assalut+)
-     (render-assalut-animation walk-img drawy hdc hmemdc))
+    ((= selected-skill +assault+)
+     (render-assault-animation walk-img drawy hdc hmemdc))
     ((= selected-skill +ankoku+)
      (render-ankoku-animation walk-img drawy hdc hmemdc))
     (t
@@ -313,15 +333,16 @@
 ;;斬られるアニメーション
 (defun render-enemy-slashed (hdc hmemdc)
   (with-slots (walk-img selected-enemy) *p*
-    (with-slots (battle-monsters) (game/donjon *game*)
-      (select-object hmemdc *slash-img*)
-      (let* ((target (nth selected-enemy battle-monsters)))
-	(with-slots (drawx drawy w h w2 h2) target
-          (trans-blt drawx drawy (* walk-img w) 0 32 32 w2 h2 hdc hmemdc))))))
+      (with-slots (battle-monsters) (game/donjon *game*)
+	(select-object hmemdc *slash-img*)
+	(let* ((target (nth selected-enemy battle-monsters)))
+	  (when target
+	    (with-slots (drawx drawy w h w2 h2) target
+              (trans-blt drawx drawy (* walk-img w) 0 32 32 w2 h2 hdc hmemdc)))))))
 
 ;;薙ぎ払いエフェクト
 (defun render-enemy-swinged (hdc hmemdc)
-  (with-slots (walk-img selected-enemy) *p*
+  (with-slots (walk-img) *p*
     (select-object hmemdc *slash-img*)
     (let* ((w 32) (h 32))
       (trans-blt 30 100 (* walk-img w) 0 w h (* w 12) (* h 12) hdc hmemdc))))
@@ -445,10 +466,64 @@
       (text-out hdc (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 10 650)
       (delete-object font))))
 
+;;再出撃かやめるか選択し部分
+(defun restart-or-quit (hdc hmemdc)
+  (with-slots (cursor) *p*
+    (let ((font (create-font "ＭＳ ゴシック" :height 58))
+	  (str-list (if (eq (game/state *game*) :title) '("出　撃" "やめる") '("再出撃" "やめる"))))
+      (select-object hdc font)
+      (render-waku-black 380 500 240 200 hdc hmemdc)
+      (loop :for i :from 0
+	    :for str :in str-list
+	    :for y :in '(520 620)
+	    :for x = 400
+	    :do
+	       (if (= i cursor)
+		   (progn
+		     (select-object hdc (aref *brush* +white+))
+		     (rectangle hdc x y (+ x 190) (+ y 60))
+		     (set-text-color hdc (encode-rgb 0 0 0))
+		     (text-out hdc (format nil "~a" str) x y))
+		   (progn
+		     (set-text-color hdc (encode-rgb 255 255 255))
+		     (text-out hdc (format nil "~a" str) x y))))
+      (delete-object font))))
+
+;;ゲームオーバー画面
+(defun render-game-over (hdc hmemdc)
+  (let ((font (create-font "ＭＳ ゴシック" :height 158))
+	(title-str  (if (eq (game/state *game*) :title) "ｼﾝもげRPG" "GAME OVER")))
+    (select-object hdc font)
+    (fuchidori-text 130 100 title-str hdc :fuchicolor (encode-rgb 255 255 255) :textcolor (encode-rgb 255 0 0))
+    (restart-or-quit hdc hmemdc)
+    (delete-object font)))
+
+;;ゲームクリア
+(defun render-game-clear (hdc hmemdc)
+  (with-slots (start-time end-time) *game*
+    (let ((font (create-font "ＭＳ ゴシック" :height 120))
+	  (font2 (create-font "ＭＳ ゴシック" :height 60))
+	  (n (- end-time start-time)))
+      (multiple-value-bind (h m s ms) (get-hms n)
+	(select-object hdc font)
+	(fuchidori-text 10 100 "Congratulations!" hdc :fuchicolor (encode-rgb 0 0 200) :textcolor (encode-rgb 0 255 255))
+	(select-object hdc font2)
+	(fuchidori-text 300 250 "クリアタイム" hdc :fuchicolor (encode-rgb 120 60 200) :textcolor (encode-rgb 110 255 25))
+	(fuchidori-text 300 350 (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) hdc :fuchicolor (encode-rgb 120 60 200) :textcolor (encode-rgb 110 255 25))
+	(restart-or-quit hdc hmemdc)
+	(delete-object font)
+	(delete-object font2)
+	))))
+
+
 (defun render-game (hdc hmemdc)
   (with-slots (state donjon start-time) *game*
     (with-slots (explore-state) *P*
       (case state
+	((:title :gameover)
+	 (render-game-over hdc hmemdc))
+	(:gameclear
+	 (render-game-clear hdc hmemdc))
 	(:battle
 	 (render-battle donjon hdc hmemdc))
 	(t
