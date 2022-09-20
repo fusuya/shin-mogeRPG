@@ -88,7 +88,7 @@
 
 ;;dragon
 (defun create-dragon (x y lv)
-  (let ((hp (+ 35 (floor (randval lv)))))
+  (let ((hp (+ 35 (floor (randval (* lv 1.8))))))
     (make-instance 'dragon :kind *dragon* :drawx x :drawy y :lv lv
 			   :w 32 :h 32 :w2 64 :h2 64
 			   :hp hp :maxhp hp :exp (+ 30 (randval lv))
@@ -96,7 +96,7 @@
 			   :agi (+ 20 (floor (randval lv) 3)))))
 ;;slime
 (defun create-slime (x y lv)
-  (let ((hp (+ 5 (floor (random lv) 3))))
+  (let ((hp (+ 5 (floor (randval lv) 3))))
     (make-instance 'slime :kind *slime* :drawx x :drawy y :lv lv
 			  :w 32 :h 32 :w2 64 :h2 64
 			  :hp hp :maxhp hp :exp (+ 3 (randval lv))
@@ -105,7 +105,7 @@
 
 ;;orc
 (defun create-orc (x y lv)
-  (let ((hp (+ 10 (random lv))))
+  (let ((hp (+ 10 (randval lv))))
     (make-instance 'orc :kind *orc* :drawx x :drawy y :lv lv
 			:w 32 :h 32 :w2 64 :h2 64
 			:hp hp :maxhp hp :exp (+ 5 (randval lv))
@@ -129,7 +129,7 @@
 			   :agi (+ 4 (floor (random lv) 3)))))
 ;;hydra
 (defun create-hydra (x y lv)
-  (let ((hp (+ 20 (floor (randval (* lv 2))))))
+  (let ((hp (+ 20 (floor (randval (* lv 1.5))))))
     (make-instance 'hydra :kind *hydra* :drawx x :drawy y :lv lv
 			  :w 32 :h 32 :w2 64 :h2 64
 			  :hp hp :maxhp hp :exp (+ 10 (randval lv))
@@ -174,7 +174,7 @@
 (Defun create-battle-monsters (donjon)
   (with-slots (battle-monsters floor-num) donjon
     (setf battle-monsters nil)
-    (let* ((monster-num (if (= floor-num 50) 1 (min 12 (+ (randval 4) (randval (floor floor-num 8)) (randval (chara/lv *p*))))))
+    (let* ((monster-num (if (= floor-num 50) 1 (min 12 (+ (randval 4) (randval (floor floor-num 8)) (randval (floor (chara/lv *p*) 6))))))
            (monsters-pos (nth monster-num *battle-monster-pos*))
 	   (battle-monster-rate (get-battle-monster-rate)))
         (loop :repeat monster-num

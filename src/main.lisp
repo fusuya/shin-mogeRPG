@@ -12,13 +12,15 @@
 (defun set-init-skill ()
   (list (car *skill-list*)))
 
+;;ゲーム
 (defun create-game ()
   (setf *game* (make-instance 'game :state :title)
 	*p* (make-instance 'player :cursor 0)
 	*keystate* (make-instance 'keystate)))
 
+;;ゲーム初期化
 (defun init-game ()
-  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 50) :state :explore
+  (setf *game* (make-instance 'game :donjon (make-instance 'donjon :floor-num 1) :state :explore
 			      :start-time (get-internal-real-time)
 			      :item-list (copy-tree *buki-d*))
         *p* (make-instance 'player :drawx 800 :drawy 280 :posx 1 :posy 1 :hp 30 :maxhp 30 :maxstr 30
@@ -350,7 +352,7 @@
 
 ;;アイテムゲット
 (defun get-item (p)
-  (let ((n (random 7)))
+  (let ((n (random 6)))
     (cond
       ((>= 3 n 0) (get-weapon p))
       ((= n 4) (get-hammer p))
@@ -650,6 +652,7 @@
 		    (create-single-damage-data target (chopped-damage-calc)))
 	     (setf chopped-num 0))))
       ((= selected-skill +ankoku+)
+       (ankoku-damaged-calc)
        (create-all-damage-date battle-monsters #'ankoku-damage-calc)))))
 
 
@@ -705,13 +708,14 @@
 ;;バトルに勝利
 (defun battle-end? (donjon)
   (with-slots (battle-monsters floor-num) donjon
-    (with-slots (attack-num exp dir tempdir battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
+    (with-slots (attack-num damage exp dir tempdir battle-state d-atk drawx drawy tempdrawx tempdrawy max-exp explore-state) *p*
       (when (eq battle-state :battle-end)
 	;;敵が全滅した時
 	(setf (game/state *game*) :explore
               (game/battle-state *game*) :player-turn
               attack-num 0
               d-atk t
+	      damage nil
 	      dir tempdir
               battle-state :action-select
               drawx tempdrawx
@@ -818,7 +822,7 @@
   (with-slots (hp maxhp damage walk-img walk-num end-animation str maxstr agi maxagi) *p*
     (incf walk-num)
     (when (zerop (mod walk-num 8))
-      (let ((heal-num (1+ (random 4))))
+      (let ((heal-num (randval (floor maxhp 7))))
 	(incf walk-img)
         (incf hp heal-num)
         (push (create-player-damaged-data heal-num (encode-rgb 0 254 0) :hp) damage)
@@ -872,7 +876,7 @@
 ;;ターゲット選ぶか選ばないか
 (defun select-skill-action ()
   (with-slots (battle-monsters) (game/donjon *game*)
-    (with-slots (chopped-num cursor selected-skill battle-state str attack-num) *p*
+    (with-slots (chopped-num cursor selected-skill agi battle-state str attack-num) *p*
       (cond
         ((or (= selected-skill +slash+)
              (= selected-skill +double-slash+)
@@ -889,7 +893,7 @@
         ((= selected-skill +chopped+)
          (create-damage-data battle-monsters)
 	 (play-skill-sound selected-skill)
-         (setf chopped-num (1+ (random (floor str 3)))
+         (setf chopped-num (1+ (randval (floor agi 3)))
                battle-state :attack-animation
                cursor 0))))))
 
@@ -1004,7 +1008,8 @@
                (decf cursor 1))
               ((and (= cursor 4) (= skill-num 5))
                (decf cursor 1))
-              ((or (= skill-num 1) (= skill-num 4))
+              ((or (and (= cursor 3) (= skill-num 4))
+		   (= skill-num 1))
                nil)
               (t
                (incf cursor))))
@@ -1136,7 +1141,7 @@
 (defmethod update-battle-monster-action ((hydra hydra))
   (with-slots (hp) hydra
     (incf hp)
-    (create-player-damaged-data (randval (floor (* hp 0.8))) (encode-rgb 255 255 255) :hp)))
+    (create-player-damaged-data (randval (floor (* hp 0.7))) (encode-rgb 255 255 255) :hp)))
 
 ;;バブル
 (defmethod update-battle-monster-action ((bubble bubble))
