@@ -77,14 +77,23 @@
   (with-slots (collide-monster) *p*
     (let ((kind (monster/kind collide-monster)))
       (cond
-	((= kind *slime*) '((:slime . 100) (:orc . 70) (:brigand . 50) (:bubble . 20)))
-	((= kind *orc*) '((:slime . 100) (:orc . 170) (:brigand . 80) (:bubble . 80)))
-	((= kind *brigand*) '((:slime . 50) (:orc . 70) (:brigand . 150) (:bubble . 80) (:hydra . 20)))
-	((= kind *bubble*) '((:slime . 30) (:orc . 50) (:brigand . 70) (:bubble . 120) (:hydra . 60) (:skelton . 30)))
-	((= kind *hydra*) '((:orc . 20) (:brigand . 50) (:bubble . 70) (:hydra . 120) (:skelton . 60) (:dragon . 5)))
-	((= kind *skelton*) '((:slime . 10) (:orc . 15) (:brigand . 30) (:bubble . 60) (:hydra . 70) (:skelton . 70) (:dragon . 25)))
-	((= kind *dragon*) '((:slime . 10) (:orc . 15) (:brigand . 30) (:bubble . 40) (:hydra . 60) (:skelton . 60) (:dragon . 45)))
+	((= kind *slime*) '((:slime . 2000) (:orc . 1700) (:brigand . 1500) (:bubble . 1200) (:yote1 . 1)))
+	((= kind *orc*) '((:slime . 2100) (:orc . 2270) (:brigand . 2080) (:bubble . 1880) (:yote1 . 1)))
+	((= kind *brigand*) '((:slime . 2050) (:orc . 2070) (:brigand . 2150) (:bubble . 2080) (:hydra . 1800) (:yote1 . 1)))
+	((= kind *bubble*) '((:slime . 1530) (:orc . 1550) (:brigand . 1570) (:bubble . 1620) (:hydra . 1560) (:skelton . 1230) (:yote1 . 1)))
+	((= kind *hydra*) '((:orc . 1320) (:brigand . 1450) (:bubble . 1570) (:hydra . 1620) (:skelton . 1560) (:dragon . 150) (:yote1 . 1)))
+	((= kind *skelton*) '((:slime . 1210) (:orc . 1215) (:brigand . 1230) (:bubble . 1260) (:hydra . 1270) (:skelton . 1270) (:dragon . 325) (:yote1 . 1)))
+	((= kind *dragon*) '((:slime . 810) (:orc . 915) (:brigand . 830) (:bubble . 1040) (:hydra . 1060) (:skelton . 1160) (:dragon . 545) (:yote1 . 1)))
 	((= kind *mogemos*) '((:mogemos . 10)))))))
+
+;;yote1
+(Defun create-yote1 (x y lv)
+  (let ((hp 3))
+    (make-instance 'dragon :kind *yote1* :drawx x :drawy y :lv lv
+			   :w 32 :h 32 :w2 64 :h2 64
+			   :hp hp :maxhp hp :exp (+ 300 (randval (* lv 10)))
+			   :str (+ 5 (floor (randval lv) 2))
+			   :agi (+ 5 (floor (randval lv) 3)))))
 
 ;;dragon
 (defun create-dragon (x y lv)
@@ -144,10 +153,10 @@
 			    :str (+ 10 (floor (random (* lv 1.1))))
 			    :agi (+ 5 (floor (random lv))))))
 ;;mogemos
-(defun create-mogemos ()
+(defun create-mogemos (lv)
   (make-instance 'mogemos :kind *mogemos* :drawx 60 :drawy 30 :lv 50
 			  :w 64 :h 64 :w2 512 :h2 512
-			  :hp 1000 :maxhp 1000 :str 100 :agi 100))
+			  :hp 1500 :maxhp 1500 :str (+ 100 lv) :agi (+ 100 lv)))
 ;;
 (defun create-battle-monster (kind x y floor-num)
   (with-slots (lv) *p*
@@ -167,7 +176,8 @@
 	(:hydra (create-hydra x y monster-lv))
 	(:skelton (create-skelton x y monster-lv))
 	(:dragon (create-dragon x y monster-lv))
-	(:mogemos (create-mogemos))))))
+	(:yote1 (create-yote1 x y monster-lv))
+	(:mogemos (create-mogemos monster-lv ))))))
 
 
 ;;バトル用のモンスター作成

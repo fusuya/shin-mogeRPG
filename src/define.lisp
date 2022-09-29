@@ -39,10 +39,10 @@ when drawing lots of small items on the screen."
                (select-object ,var ,gold)
                (delete-object ,gbm))))))))
 
-;;(defparameter *data-root* (asdf:system-source-directory 'casket2022aki))
-;;(defparameter *img-root* (merge-pathnames "assets/img/" *data-root*))
-;;(defparameter *sound-root* (merge-pathnames "assets/sound/" *data-root*))
-;;(defparameter *save-root* (merge-pathnames "assets/save/" *data-root*))
+(defparameter *data-root* (asdf:system-source-directory 'casket2022aki))
+(defparameter *img-root* (merge-pathnames "assets/img/" *data-root*))
+(defparameter *sound-root* (merge-pathnames "assets/sound/" *data-root*))
+(defparameter *save-root* (merge-pathnames "assets/save/" *data-root*))
 
 (defparameter *objs-img* nil)
 (defparameter *p-walk-img* nil)
@@ -95,6 +95,7 @@ when drawing lots of small items on the screen."
 (defvar *potion-wav* (namestring (merge-pathnames "potion.wav" *sound-root*)))
 (defvar *collide-monster-wav* (namestring (merge-pathnames "collide-monster.wav" *sound-root*)))
 (defvar *monster-dead-wav* (namestring (merge-pathnames "monster-dead.wav" *sound-root*)))
+
 
 (defparameter *brush* nil)
 ;;ブラシ生成
@@ -187,6 +188,8 @@ when drawing lots of small items on the screen."
 (defconstant +chest+ 13)
 (defconstant +kaidan+ 14)
 (defconstant +empty-chest+ 15)
+(defconstant +magic-circle+ 16)
+(defconstant +magic-block+ 17)
 
 (defparameter *c-rect* nil) ;;クライアント領域
 
@@ -202,7 +205,7 @@ when drawing lots of small items on the screen."
 (defparameter *brigand* 0)
 (defparameter *dragon* 32)
 (defparameter *hydra* 64)
-(defparameter *metal* 96)
+(defparameter *yote1* 96)
 (defparameter *orc* 128)
 (defparameter *slime* 160)
 (defparameter *bubble* 192)
@@ -265,6 +268,8 @@ when drawing lots of small items on the screen."
    (damage :initarg :damage :initform nil :accessor chara/damage)
    (exp :initarg :exp :initform 0 :accessor chara/exp)
    (heal-data :initarg :heal-data :initform nil :accessor chara/heal-data)
+   (def :initarg :def :initform 0 :accessor chara/def)
+   (maxdef :initarg :maxdef :initform 0 :accessor chara/maxdef)
    (hp :initarg :hp :initform 0 :accessor chara/hp)
    (maxhp :initarg :maxhp :initform 0 :accessor chara/maxhp)
    (str :initarg :str :initform 0 :accessor chara/str)
@@ -277,8 +282,8 @@ when drawing lots of small items on the screen."
 (defclass player (chara)
   ((skill :initarg :skill :initform nil :accessor player/skill)
    (dash :initarg :dash :initform nil :accessor player/dash)
-   (weapon :initarg :weapon :initform 0 :accessor weapon/weapon)
-   (max-exp :initarg :max-exp :initform 100 :accessor chara/max-exp)
+   (weapon :initarg :weapon :initform 0 :accessor player/weapon)
+   (max-exp :initarg :max-exp :initform 100 :accessor player/max-exp)
    (skill-num :initarg :skill-num :initform 1 :accessor player/skill-num)
    (selected-skill :initarg :selected-skill :initform 0 :accessor player/selected-skill)
    (selected-enemy :initarg :selected-enmey :initform 0 :accessor player/selected-enemy)
@@ -326,6 +331,9 @@ when drawing lots of small items on the screen."
 (defclass dragon (monster)
   ())
 (defclass mogemos (monster)
+  ())
+
+(defclass yote1 (monster)
   ())
 
 (defclass skill ()

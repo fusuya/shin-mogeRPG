@@ -11,7 +11,6 @@
 
 (defun set-init-skill ()
   (list (car *skill-list*)))
-
 ;;ゲーム
 (defun create-game ()
   (setf *game* (make-instance 'game :state :title)
@@ -27,7 +26,7 @@
                                    :maxagi 30 :agi 30 :str 30 :tempdrawx 800 :tempdrawy 280
                                    :battle-state :action-select :hammer 10
                                    :explore-state :player-move
-                                   :potion 3 :lv 1 :exp 0 :max-exp 100
+                                   :potion 3 :lv 1 :exp 0 :max-exp 10
 				   :weapon (make-instance 'weapon :name "素手" :power 0 :inchp 0 :incagi 0)
                                    :skill (set-init-skill)))
   (create-maze (game/donjon *game*))
@@ -167,6 +166,8 @@
 (defun break-soft-wall ()
   (let* ((next-pos (get-next-pos *p*))
 	 (next-cell (get-next-cell next-pos)))
+    (when (eq (cell/cell next-cell) +magic-block+)
+      (setf (cell/item next-cell) +magic-circle+))
     (setf (cell/cell next-cell) +yuka+
 	  (cell/breaked next-cell) 200)
     (push next-cell (player/breakblock *p*))))
@@ -197,7 +198,9 @@
 	       (up (setf dir *up*))
 	       (down (setf dir *down*))))
 	;;ハンマー
-	((and keyx (> hammer 0) (search-next-cell *p* :nextcell +soft-block+))
+	((and keyx (> hammer 0)
+	      (or (search-next-cell *p* :nextcell +soft-block+)
+		  (search-next-cell *p* :nextcell +magic-block+)))
 	 (break-soft-wall)
 	 (sound-play *hammer-wav*)
 	 (decf hammer))
@@ -358,6 +361,19 @@
       ((= n 4) (get-hammer p))
       ((>= 6 n 5) (get-potion p)))))
 
+;;もげぞーの剣イベント
+(defun mogezou-sword-event (p)
+  (with-slots (explore-state weapon hp maxhp str maxstr agi maxagi) p
+    (when (string= (weapon/name weapon) "もげぞーの剣")
+      (setf explore-state :mogezou-sword
+	    weapon (make-instance 'weapon :name "ｼﾝもげぞうの光剣" :power 200 :inchp 100 :incagi 50)
+	    maxhp (+ maxhp 100)
+	    hp maxhp
+	    maxstr (+ str 100)
+	    str maxstr
+	    maxagi (+ maxagi 50)
+	    agi maxagi))))
+
 ;;アイテムの当たり判定
 (defun player-pos-event (mover)
   (with-slots (posx posy explore-state) mover
@@ -365,6 +381,8 @@
       (with-slots (item) cell
 	(when item
 	  (cond
+	    ((= item +magic-circle+)
+	     (mogezou-sword-event mover))
 	    ((= item +chest+)
 	     (sound-play *chest-wav*)
 	     (get-item mover)
@@ -459,9 +477,10 @@
     (setf drawx (* posx *cell-size*)
 	  drawy (* posy *cell-size*)))
   (loop :for monster :in (donjon/monsters donjon)
-	:do (with-slots (posx posy drawx drawy) monster
-	      (setf drawx (* posx *cell-size*)
-		    drawy (* posy *cell-size*)))))
+	:do (with-slots (posx posy drawx drawy kind) monster
+	      (when (/= kind *mogemos*)
+		(setf drawx (* posx *cell-size*)
+		      drawy (* posy *cell-size*))))))
 
 ;;ダッシュ
 (defun dash (donjon)
@@ -476,11 +495,12 @@
 	      (when (collide-monsters? donjon)
 		(return-from moge))
 	      (loop :for monster :in (donjon/monsters donjon)
-		    :do (monster-random-move  monster)
-			(setf (chara/walk-flag monster) nil)
-			(when (collide-monster? *p* monster)
-			  (setf collide-monster monster)
-			  (return-from moge)))
+		    :do (when (/= (monster/kind monster) *mogemos*)
+			  (monster-random-move  monster)
+			  (setf (chara/walk-flag monster) nil)
+			  (when (collide-monster? *p* monster)
+			    (setf collide-monster monster)
+			    (return-from moge))))
 	      (when (player-pos-event *p*)
 		(return-from moge)))
     (set-draw-position donjon)
@@ -521,6 +541,7 @@
 		walk-num 0
 		walk-img 0
 		tempdir dir
+		dir *left*
 		max-attack-num (1+ (truncate (/ (max 0 agi) 15)))))
 	 ;;敵からぶつかってきた
 	 ((eq explore-state :collide-m)
@@ -544,38 +565,44 @@
     (create-battle-monsters donjon)))
 
 ;;斬るのダメージ計算
-(defun slash-damage-calc ()
+(defun slash-damage-calc (target)
   (with-slots (str) *p*
-    (+ 2 (random (max 1 (floor str 2)))))) ;;TODO
+    (with-slots (def) target
+      (+ 2 (random (max 1 (floor str 2))))))) ;;TODO
 
 ;;二段切りのダメージ計算
-(defun double-slash-damage-calc ()
+(defun double-slash-damage-calc (target)
   (with-slots (str) *p*
-    (1+ (floor (random str) 5))))
+    (with-slots (def) target
+      (1+ (floor (random str) 5)))))
 
 ;;凪払いのダメージ
-(defun swing-damage-calc ()
+(defun swing-damage-calc (target)
   (with-slots (str) *p*
-    (1+ (floor (random str) 10))))
+    (with-slots (def) target
+      (1+ (floor (random str) 10)))))
 
 ;;乱れ切りのダメージ
-(defun chopped-damage-calc ()
+(defun chopped-damage-calc (target)
   (with-slots (str) *p*
-    (1+ (floor (random str) 8))))
+    (with-slots (def) target
+      (min 8 (1+ (floor (randval str) 8))))))
 
 ;;突撃のダメージ
-(defun assault-damage-calc ()
+(defun assault-damage-calc (target)
   (with-slots (str agi) *p*
-    (let ((n (random (+ 30 agi))))
-      (cond
-        ((>= n 30)
-         (+ (floor str 3) (floor (random str) 2)))
-        (t "ミス")))))
+    (with-slots (def) target 
+      (let ((n (random (+ 30 agi))))
+	(cond
+          ((>= n 30)
+           (+ (floor str 2) (floor (randval str) 2)))
+          (t "ミス"))))))
 
 ;;暗黒ダメージ
-(Defun ankoku-damage-calc ()
+(Defun ankoku-damage-calc (target)
   (with-slots (str) *p*
-    (1+ (floor (randval str) 5))))
+    (with-slots (def) target
+    (1+ (floor (randval str) 5)))))
 
 ;;暗黒使えるか
 (defun can-ankoku? ()
@@ -607,20 +634,25 @@
 
 
 ;;単体へのダメージデータ生成
-(defun create-single-damage-data (target num)
-  (with-slots (damage drawx drawy hp w h w2 h2) target
-    (when (numberp num)
-      (decf hp (min hp num)))
-    (setf damage (make-instance 'damage :num num :timer 0 :color (encode-rgb 255 255 255)
-                                        :dy 5 :dx -2
-                                        :drawx (- drawx 5)
-                                        :drawy (+ drawy (- h2 12))
-                                        :tempy (+ drawy (- h2 12))
-                                        :topy  (+ drawy (- h2 34))))))
+(defun create-single-damage-data (target func)
+  (with-slots (damage drawx drawy hp w h w2 h2 kind) target
+    (let ((num (funcall func target)))
+      (when (= kind *yote1*)
+	(if (>= (random 3) 1)
+	    (setf num 1)
+	    (setf num "ミス")))
+      (when (numberp num)
+	(decf hp (min hp num)))
+      (setf damage (make-instance 'damage :num num :timer 0 :color (encode-rgb 255 255 255)
+                                          :dy 5 :dx -2
+                                          :drawx (- drawx 5)
+                                          :drawy (+ drawy (- h2 12))
+                                          :tempy (+ drawy (- h2 12))
+                                          :topy  (+ drawy (- h2 34)))))))
 ;;全体へのダメージデータ精製
 (defun create-all-damage-date (battle-monsters func)
   (loop :for monster :in battle-monsters
-        :do (create-single-damage-data monster (funcall func))))
+        :do (create-single-damage-data monster func)))
 
 ;;HPが0以上敵を取り出す
 (defun get-alive-monsters ()
@@ -638,24 +670,22 @@
   (with-slots (selected-skill selected-enemy hp maxhp chopped-num) *p*
     (cond
       ((= selected-skill +slash+)
-       (create-single-damage-data (nth selected-enemy battle-monsters) (slash-damage-calc)))
+       (create-single-damage-data (nth selected-enemy battle-monsters) #'slash-damage-calc))
       ((= selected-skill +double-slash+)
-       (create-single-damage-data (nth selected-enemy battle-monsters) (double-slash-damage-calc)))
+       (create-single-damage-data (nth selected-enemy battle-monsters) #'double-slash-damage-calc))
       ((= selected-skill +swing+)
        (create-all-damage-date battle-monsters #'swing-damage-calc))
       ((= selected-skill +assault+)
-       (create-single-damage-data (nth selected-enemy battle-monsters) (assault-damage-calc)))
+       (create-single-damage-data (nth selected-enemy battle-monsters) #'assault-damage-calc))
       ((= selected-skill +chopped+)
        (let* ((target (get-chopped-target)))
 	 (if target
              (progn (sound-play *slash-wav*)
-		    (create-single-damage-data target (chopped-damage-calc)))
+		    (create-single-damage-data target #'chopped-damage-calc))
 	     (setf chopped-num 0))))
       ((= selected-skill +ankoku+)
        (ankoku-damaged-calc)
        (create-all-damage-date battle-monsters #'ankoku-damage-calc)))))
-
-
 
 ;;ダメージフォントの位置更新
 (defun update-damage-position (dmg)
@@ -757,7 +787,8 @@
        (setf d-atk nil
              battle-state :enemy-select))
       ;;プレイヤーのターン終了
-      ((>= attack-num max-attack-num)
+      ((and (>= attack-num max-attack-num)
+	    (= chopped-num 0))
        (setf (game/battle-state *game*) :enemy-turn
              d-atk t
              attack-num 0))
@@ -776,6 +807,8 @@
   (with-slots (walk-img walk-num end-animation) *p*
     (let ((d (if (> walk-img 0) 14 18)))
       (incf walk-num)
+      (when (= walk-num 30)
+	(create-damage-data (donjon/battle-monsters (game/donjon *game*))))
       (when (zerop (mod walk-num d))
         (incf walk-img)
         (when (>= walk-img 4)
@@ -883,9 +916,13 @@
              (= selected-skill +assault+))
          (setf battle-state :enemy-select
                cursor 0))
-        ((or (= selected-skill +swing+)
-             (= selected-skill +ankoku+))
-         (create-damage-data battle-monsters)
+	((= selected-skill +swing+)
+	 (create-damage-data battle-monsters)
+	 (play-skill-sound selected-skill)
+         (setf battle-state :attack-animation
+               cursor 0
+	       attack-num (1+ attack-num)))
+        ((= selected-skill +ankoku+)
 	 (play-skill-sound selected-skill)
          (setf battle-state :attack-animation
                cursor 0
@@ -893,9 +930,10 @@
         ((= selected-skill +chopped+)
          (create-damage-data battle-monsters)
 	 (play-skill-sound selected-skill)
-         (setf chopped-num (1+ (randval (floor agi 3)))
+         (setf chopped-num (randval (floor agi 5))
                battle-state :attack-animation
-               cursor 0))))))
+               cursor 0
+	       attack-num (1+ attack-num)))))))
 
 ;;ポーション使う
 (defun use-potion-battle ()
@@ -965,7 +1003,7 @@
              (create-damage-data battle-monsters))))))))
 
 
-;;バトル中の行動選択
+;;バトル中のスキル選択
 (defun update-action-select ()
   (with-slots (potion cursor skill selected-skill attack-num) *p*
     (with-slots (right left up down keyz keya) *keystate*
@@ -977,10 +1015,19 @@
           ((and keya (= potion 0))
            nil) ;;TODO sound
           (right
-            (when (>= skill-num 4)
-              (if (< cursor 3)
-                  (incf cursor 3)
-                  (decf cursor 3))))
+           (cond
+	     ((and (= skill-num 6)
+		   (<= cursor 2))
+	      (incf cursor 3))
+	     ((and (= skill-num 4)
+		   (= cursor 0))
+	      (incf cursor 3))
+	     ((and (= skill-num 5)
+		   (or (= cursor 0)
+		       (= cursor 1)))
+	      (incf cursor 3))
+	     ((>= cursor 3)
+	      (decf cursor 3))))
           (left
             (when (>= skill-num 4)
               (if (< cursor 3)
@@ -996,7 +1043,8 @@
                (incf cursor 2))
               ((and (= cursor 3) (= skill-num 5))
                (incf cursor 1))
-              ((or (= skill-num 1) (= cursor 4))
+              ((or (= skill-num 1)
+		   (and (= skill-num 4) (= cursor 3)))
                nil)
               (t
                (decf cursor))))
@@ -1133,9 +1181,9 @@
 (defmethod update-battle-monster-action ((dragon dragon))
   (with-slots (str agi hp) dragon
     (case (random 3)
-      (0 (create-player-damaged-data (randval str) (encode-rgb 125 125 125) :hpstr))
-      (1 (create-player-damaged-data (randval agi) (encode-rgb 255 125 0) :stragi))
-      (2 (create-player-damaged-data (randval hp) (encode-rgb 0 125 255) :hpagi)))))
+      (0 (create-player-damaged-data (randval (floor (* str 0.8))) (encode-rgb 125 125 125) :hpstr))
+      (1 (create-player-damaged-data (randval (floor (* 0.8 agi))) (encode-rgb 255 125 0) :stragi))
+      (2 (create-player-damaged-data (randval (floor (* 0.8 hp))) (encode-rgb 0 125 255) :hpagi)))))
 
 ;;ヒドラ
 (defmethod update-battle-monster-action ((hydra hydra))
@@ -1146,22 +1194,22 @@
 ;;バブル
 (defmethod update-battle-monster-action ((bubble bubble))
   (with-slots (str agi) bubble
-    (create-player-damaged-data (floor (randval (+ str agi)) 3) (encode-rgb 125 255 0) :hpstragi)))
+    (create-player-damaged-data (randval (floor (+ str agi) 3)) (encode-rgb 125 255 0) :hpstragi)))
     
 ;;オーク
 (defmethod update-battle-monster-action ((orc orc))
   (with-slots (str) orc
     (if (>= (random 3) 1)
-	(create-player-damaged-data (randval str) (encode-rgb 255 255 255) :hp)
+	(create-player-damaged-data (randval (floor (* 0.9 str))) (encode-rgb 255 255 255) :hp)
 	(if (>= (random 3) 1)
 	    (create-player-damaged-data "ミス" (encode-rgb 255 255 255) :hp)
-	    (create-player-damaged-data (floor (randval (* str 1.7))) (encode-rgb 255 255 0) :hp)))))
+	    (create-player-damaged-data (floor (randval (* str 1.4))) (encode-rgb 255 255 0) :hp)))))
 ;;スライム
 (defmethod update-battle-monster-action ((slime slime))
   (with-slots (str agi) slime
     (if (= (random 2) 0)
 	(create-player-damaged-data (1+ (randval agi)) (encode-rgb 255 0 255) :agi)
-	(create-player-damaged-data (floor (randval str) 2) (encode-rgb 255 255 255) :hp))))
+	(create-player-damaged-data (randval (floor str 2)) (encode-rgb 255 255 255) :hp))))
 
 ;;brigand
 (defmethod update-battle-monster-action ((brigand brigand))
@@ -1171,13 +1219,18 @@
       (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
       (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
 
+;;yote1
+(defmethod update-battle-monster-action ((yote1 yote1))
+  (with-slots (str agi) yote1
+    (create-player-damaged-data (randval (floor str 2)) (encode-rgb 255 255 255) :hp)))
+
 ;;モゲモス
 (defmethod update-battle-monster-action  ((mogemos mogemos))
   (with-slots (str agi) mogemos
     (case (random 3)
-      (0 (create-player-damaged-data (1+ (floor (randval str) 2)) (encode-rgb 255 255 255) :hp))
-      (1 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 0 255 255) :str))
-      (2 (create-player-damaged-data (1+ (floor (randval agi) 2)) (encode-rgb 255 0 255) :agi)))))
+      (0 (create-player-damaged-data (1+ (floor (randval str) 3)) (encode-rgb 255 255 255) :hp))
+      (1 (create-player-damaged-data (1+ (floor (randval str) 4)) (encode-rgb 0 255 255) :str))
+      (2 (create-player-damaged-data (1+ (floor (randval agi) 6)) (encode-rgb 255 0 255) :agi)))))
 ;;--------------------------------------------------------------------------------------------------------
 
 ;;プレイヤーのHP減らす
@@ -1205,8 +1258,8 @@
     (with-slots (battle-monsters) donjon
       (setf dir *guard*)
       (loop :for monster :in battle-monsters
-            :do (with-slots (kind) monster
-		  (let ((attack-num (if (eq kind *mogemos*) 3 1)))
+            :do (with-slots (kind agi) monster
+		  (let ((attack-num (if (eq kind *mogemos*) (max 3 (floor agi 30)) 1)))
 		    (loop :repeat attack-num
 			  :do
 			     (let* ((dmg (update-battle-monster-action monster)))
@@ -1289,7 +1342,8 @@
 	   ((eq explore-state :get-weapon)
 	    (update-get-weapon))
 	   ((or (eq explore-state :get-potion)
-		(eq explore-state :get-hammer))
+		(eq explore-state :get-hammer)
+		(eq explore-state :mogezou-sword))
 	    (update-get-item))
 	   ((eq explore-state :level-up)
 	    (update-level-up))

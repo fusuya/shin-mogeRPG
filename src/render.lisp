@@ -165,6 +165,18 @@
   (select-object hmemdc *waku-black*)
   (trans-blt x y 0 0 128 128 w h hdc hmemdc))
 
+;;もげぞーの剣イベント
+(defun render-mogezou-sword-event (hdc hmemdc)
+  (let ((font (create-font "ＭＳ ゴシック" :height 28)))
+    (select-object hdc font)
+    (render-waku-black 190 200 420 100 hdc hmemdc)
+    (set-text-color hdc (encode-rgb 155 225 125))
+    (text-out hdc "もげぞーの剣が輝きだし" 240 210)
+    (set-text-color hdc (encode-rgb 148 85 225))
+    (text-out hdc "ｼﾝもげぞうの光剣に進化した！" 210 250)
+    
+    (delete-object font)))
+
 ;;アイテムゲット
 (defun render-item-get-window (hdc hmemdc str)
   (let ((font (create-font "ＭＳ ゴシック" :height 28)))
@@ -506,6 +518,7 @@
   (with-slots (start-time end-time) *game*
     (let ((font (create-font "ＭＳ ゴシック" :height 120))
 	  (font2 (create-font "ＭＳ ゴシック" :height 60))
+	  (font3 (create-font "ＭＳ ゴシック" :height 30))
 	  (n (- end-time start-time)))
       (multiple-value-bind (h m s ms) (get-hms n)
 	(select-object hdc font)
@@ -513,9 +526,15 @@
 	(select-object hdc font2)
 	(fuchidori-text 300 250 "クリアタイム" hdc :fuchicolor (encode-rgb 120 60 200) :textcolor (encode-rgb 110 255 25))
 	(fuchidori-text 300 350 (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) hdc :fuchicolor (encode-rgb 120 60 200) :textcolor (encode-rgb 110 255 25))
+	(when (string= (weapon/name (player/weapon *p*)) "ｼﾝもげぞうの光剣")
+	  (select-object hmemdc *p-walk-img*)
+	  (trans-blt 10 450 (* *down* 32) 0 24 32 48 64 hdc hmemdc)
+	  (select-object hdc font3)
+	  (text-out hdc "<お前がナンバーワンだ" 60 450))
 	(restart-or-quit hdc hmemdc)
 	(delete-object font)
 	(delete-object font2)
+	(delete-object font3)
 	))))
 
 
@@ -540,6 +559,8 @@
 	   (render-item-get-window hdc hmemdc "ポーション"))
 	 (when (eq :get-hammer explore-state)
 	   (render-item-get-window hdc hmemdc "ハンマー"))
+	 (when (eq :mogezou-sword explore-state)
+	   (render-mogezou-sword-event hdc hmemdc))
 	 (when (eq :level-up explore-state)
 	   (render-level-up-window hdc hmemdc))
 	 (render-time hdc start-time)
