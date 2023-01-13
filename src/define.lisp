@@ -39,6 +39,7 @@ when drawing lots of small items on the screen."
                (select-object ,var ,gold)
                (delete-object ,gbm))))))))
 
+
 (defparameter *data-root* (asdf:system-source-directory 'casket2022aki))
 (defparameter *img-root* (merge-pathnames "assets/img/" *data-root*))
 (defparameter *sound-root* (merge-pathnames "assets/sound/" *data-root*))
