@@ -1,5 +1,5 @@
 (in-package :casket2022aki)
-;; hoge2
+;; hoge22
 (defmacro my-enum (&rest names)
   `(progn
      ,@(loop for i from 0
